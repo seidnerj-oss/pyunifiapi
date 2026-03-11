@@ -27,3 +27,15 @@ class SSHSessionError(PyUnifiApiError):
 
 class SDPPollTimeoutError(PyUnifiApiError):
     """Timed out waiting for SDP offer from device."""
+
+
+class WebSocketError(PyUnifiApiError):
+    """WebSocket connection or communication error."""
+
+
+class LoginRequired(PyUnifiApiError):
+    """Operation requires an active authenticated session."""
+
+
+class RequestError(PyUnifiApiError):
+    """API request returned an error response."""

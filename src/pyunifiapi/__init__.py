@@ -3,15 +3,19 @@
 from pyunifiapi._exceptions import (
     ApiConnectionError,
     AuthenticationError,
+    LoginRequired,
     PyUnifiApiError,
+    RequestError,
     SDPPollTimeoutError,
     SignalingError,
     SSHSessionError,
     WebRTCError,
+    WebSocketError,
 )
 from pyunifiapi._types import CloudConfig, ControllerConfig, SSHConfig, TurnCredentials
 from pyunifiapi.client import UnifiClient
 from pyunifiapi.cloud import CloudClient
+from pyunifiapi.controller import Controller
 from pyunifiapi.ssh.session import SSHSession
 
 __all__ = [
@@ -19,8 +23,11 @@ __all__ = [
     'AuthenticationError',
     'CloudClient',
     'CloudConfig',
+    'Controller',
     'ControllerConfig',
+    'LoginRequired',
     'PyUnifiApiError',
+    'RequestError',
     'SDPPollTimeoutError',
     'SSHConfig',
     'SSHSession',
@@ -29,4 +36,5 @@ __all__ = [
     'TurnCredentials',
     'UnifiClient',
     'WebRTCError',
+    'WebSocketError',
 ]
