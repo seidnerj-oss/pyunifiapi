@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-py-unifiapi is a Python reimplementation of [node-unifiapi](https://github.com/delian/node-unifiapi) - a client for the Ubiquiti UniFi controller REST API, cloud API, and SSH-over-WebRTC. The primary use case is SSH access to UniFi devices through the controller's WebRTC debug terminal protocol, enabling programmatic shell access to devices that don't expose SSH directly.
+py-unifiapi is a Python client for UniFi Network controller and cloud API over WebRTC. The primary use case is SSH access to UniFi devices through the controller's WebRTC debug terminal protocol, enabling programmatic shell access to devices that don't expose SSH directly. Also provides a full REST API client and cloud API access via WebRTC data channels. Supports TOTP-based 2FA.
 
 ## Quick Setup
 

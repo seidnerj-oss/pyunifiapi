@@ -46,16 +46,24 @@ class CloudHttpTransport:
         return self._client
 
     async def sso_login(self) -> None:
-        """Login to Ubiquiti SSO (sso.ubnt.com)."""
+        """Login to Ubiquiti SSO (sso.ubnt.com).
+
+        If the cloud config includes a TOTP secret, generates a
+        one-time code and includes it as ``ubic_2fa_token`` in the
+        login payload.
+        """
         client = await self._ensure_client()
+        payload: dict = {
+            'user': self._config.username,
+            'password': self._config.password,
+        }
+        if self._config.totp_secret:
+            import pyotp
+
+            payload['ubic_2fa_token'] = pyotp.TOTP(self._config.totp_secret).now()
+
         try:
-            resp = await client.post(
-                f'{CLOUD_SSO_URL}/login',
-                json={
-                    'user': self._config.username,
-                    'password': self._config.password,
-                },
-            )
+            resp = await client.post(f'{CLOUD_SSO_URL}/login', json=payload)
         except httpx.ConnectError as e:
             raise ApiConnectionError(f'Cannot connect to Ubiquiti SSO: {e}') from e
 

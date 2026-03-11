@@ -17,6 +17,7 @@ class ControllerConfig:
     port: int = DEFAULT_CONTROLLER_PORT
     site: str = DEFAULT_SITE
     ssl_verify: bool = False
+    totp_secret: str | None = None
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class CloudConfig:
     username: str
     password: str
     device_id: str
+    totp_secret: str | None = None
 
 
 @dataclass(frozen=True)

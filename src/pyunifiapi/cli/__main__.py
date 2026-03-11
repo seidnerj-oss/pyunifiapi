@@ -19,6 +19,7 @@ async def ssh_command(args: argparse.Namespace) -> None:
         password=args.password,
         port=args.port,
         site=args.site,
+        totp_secret=args.totp_secret,
     )
     ssh_config = SSHConfig(
         mac=args.mac,
@@ -64,7 +65,7 @@ def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog='pyunifiapi',
-        description='Python client for UniFi controller API and SSH-over-WebRTC',
+        description='Python client for UniFi Network controller and cloud API over WebRTC',
     )
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable debug logging')
     subparsers = parser.add_subparsers(dest='command_name')
@@ -77,6 +78,7 @@ def main() -> None:
     ssh_parser.add_argument('--mac', required=True, help='Target device MAC address')
     ssh_parser.add_argument('--port', type=int, default=443, help='Controller port (default: 443)')
     ssh_parser.add_argument('--site', default='default', help='UniFi site (default: default)')
+    ssh_parser.add_argument('--totp-secret', help='TOTP secret (base32) for 2FA-enabled controllers')
     ssh_parser.add_argument('--ssh-username', default='ubnt', help='SSH username on device (default: ubnt)')
     ssh_parser.add_argument('--ssh-password', default='ubnt', help='SSH password on device (default: ubnt)')
     ssh_parser.add_argument('--command', '-c', help='Execute a single command and exit')

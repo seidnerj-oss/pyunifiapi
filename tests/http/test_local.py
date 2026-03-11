@@ -130,6 +130,52 @@ class TestLocalHttpTransport:
         transport = LocalHttpTransport(config)
         assert transport.base_url == 'https://10.0.0.1:8443'
 
+    async def test_login_with_2fa(self) -> None:
+        config = ControllerConfig(host='192.168.1.1', username='admin', password='password', totp_secret='JBSWY3DPEHPK3PXP')
+        transport = LocalHttpTransport(config)
+        mock_response = httpx.Response(
+            200,
+            json={'meta': {'rc': 'ok'}},
+            headers={'x-csrf-token': 'test-csrf'},
+            request=httpx.Request('POST', 'https://192.168.1.1:443/api/auth/login'),
+        )
+
+        with patch.object(transport, '_ensure_client') as mock_ensure:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_ensure.return_value = mock_client
+
+            await transport.login()
+
+            # Verify the login payload included ubic_2fa_token
+            call_kwargs = mock_client.post.call_args
+            login_json = call_kwargs.kwargs.get('json') or call_kwargs[1].get('json')
+            assert 'ubic_2fa_token' in login_json
+            assert len(login_json['ubic_2fa_token']) == 6
+            assert login_json['ubic_2fa_token'].isdigit()
+            assert transport._authenticated is True
+
+    async def test_login_without_2fa_no_token(self, config: ControllerConfig) -> None:
+        transport = LocalHttpTransport(config)
+        mock_response = httpx.Response(
+            200,
+            json={'meta': {'rc': 'ok'}},
+            headers={'x-csrf-token': 'test-csrf'},
+            request=httpx.Request('POST', 'https://192.168.1.1:443/api/auth/login'),
+        )
+
+        with patch.object(transport, '_ensure_client') as mock_ensure:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_ensure.return_value = mock_client
+
+            await transport.login()
+
+            # Verify no ubic_2fa_token when totp_secret is not set
+            call_kwargs = mock_client.post.call_args
+            login_json = call_kwargs.kwargs.get('json') or call_kwargs[1].get('json')
+            assert 'ubic_2fa_token' not in login_json
+
     async def test_close(self, config: ControllerConfig) -> None:
         transport = LocalHttpTransport(config)
         mock_client = AsyncMock()

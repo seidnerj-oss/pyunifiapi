@@ -49,17 +49,25 @@ class LocalHttpTransport:
         return self._client
 
     async def login(self) -> None:
-        """Authenticate with the controller using username/password."""
+        """Authenticate with the controller using username/password.
+
+        If the controller config includes a TOTP secret, generates a
+        one-time code and includes it as ``ubic_2fa_token`` in the
+        login payload.
+        """
         client = await self._ensure_client()
+        payload: dict = {
+            'username': self._config.username,
+            'password': self._config.password,
+            'rememberMe': True,
+        }
+        if self._config.totp_secret:
+            import pyotp
+
+            payload['ubic_2fa_token'] = pyotp.TOTP(self._config.totp_secret).now()
+
         try:
-            resp = await client.post(
-                API_LOGIN,
-                json={
-                    'username': self._config.username,
-                    'password': self._config.password,
-                    'rememberMe': True,
-                },
-            )
+            resp = await client.post(API_LOGIN, json=payload)
         except httpx.ConnectError as e:
             raise ApiConnectionError(f'Cannot connect to controller at {self.base_url}: {e}') from e
 

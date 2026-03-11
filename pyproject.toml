@@ -5,13 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "py-unifiapi"
 version = "0.1.0"
-description = "Python client for UniFi controller REST API, cloud API, and SSH-over-WebRTC"
+description = "Python client for UniFi Network controller and cloud API over WebRTC"
 readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "MIT" }
 dependencies = [
     "httpx",
     "aiortc",
+    "pyotp",
     "websockets",
 ]
 

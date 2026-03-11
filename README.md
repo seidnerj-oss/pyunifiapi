@@ -1,14 +1,15 @@
 # py-unifiapi
 
-Python client for Ubiquiti UniFi controller REST API, cloud API, and SSH-over-WebRTC.
+Python client for UniFi Network controller and cloud API over WebRTC.
 
-A Python reimplementation of [node-unifiapi](https://github.com/delian/node-unifiapi), providing programmatic access to UniFi devices - including SSH sessions through the controller's WebRTC debug terminal protocol.
+Provides programmatic access to UniFi devices - REST API, SSH sessions via the controller's WebRTC debug terminal protocol, and cloud API proxied over WebRTC data channels. Supports TOTP-based 2FA.
 
 ## Features
 
 - **Local REST API** - Full UniFi controller REST API client (devices, clients, networks, statistics, settings)
 - **SSH-over-WebRTC** - Open SSH sessions to UniFi devices through the controller, using the same WebRTC protocol as the browser debug terminal
 - **Cloud API** - Connect to cloud-managed controllers via Ubiquiti SSO and WebRTC data channels
+- **2FA support** - TOTP-based two-factor authentication for controllers and cloud SSO
 - **Async-first** - Built on asyncio with httpx, aiortc, and websockets
 
 ## Installation
