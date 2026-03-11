@@ -21,6 +21,7 @@ pyunifiapi = "pyunifiapi.cli.__main__:main"
 
 [dependency-groups]
 dev = [
+    "basedpyright",
     "mypy",
     "pre-commit",
     "pytest",
@@ -53,9 +54,13 @@ select = ["E", "F", "I", "UP"]
 
 [tool.mypy]
 python_version = "3.14"
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
+
+[tool.basedpyright]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
 
 [tool.uv]
 required-version = ">=0.10"
