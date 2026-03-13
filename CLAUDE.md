@@ -23,6 +23,10 @@ src/pyunifiapi/
   _exceptions.py         # Exception hierarchy
   client.py              # UnifiClient - local controller REST API (~40 methods)
   cloud.py               # CloudClient - REST via WebRTC data channel through cloud
+  controller.py          # Controller connection management
+  websocket.py           # WebSocket event streaming
+  handlers/              # API handler methods
+  models/                # Data models
   http/
     _local.py            # LocalHttpTransport - httpx with cookie auth, CSRF, auto-reauth
     _cloud.py            # CloudHttpTransport - httpx for Ubiquiti SSO (sso.ubnt.com)
@@ -37,6 +41,14 @@ src/pyunifiapi/
   cli/
     __main__.py          # CLI entry point (pyunifiapi ssh ...)
 ```
+
+## Code Provenance Policy
+
+**All code must be written independently.** Never directly copy or adapt code from any external source - always study the concept and implement it yourself from scratch. Specifically:
+
+- **Never copy or adapt code from AGPL, GPL, SSPL, or other copyleft-licensed projects.** These licenses are incompatible with MIT.
+- **Never copy or adapt code from proprietary or commercially-licensed sources.**
+- **In rare cases** where direct reuse of code from MIT, BSD, Apache 2.0 projects is genuinely necessary, preserve their license/copyright notices. Prefer independent implementation.
 
 ## Code Style Guidelines
 

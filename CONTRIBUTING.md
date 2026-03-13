@@ -41,11 +41,21 @@ The following checks run automatically on commit:
 
 - **ruff lint** - Python linting with auto-fix
 - **ruff format** - Code formatting
+- **detect-secrets** - Scan for accidentally committed secrets
 - **trailing-whitespace** - Trim trailing whitespace
 - **end-of-file-fixer** - Ensure files end with newline
 - **mixed-line-ending** - Normalize to LF
+- **check-merge-conflict** - Check for merge conflict strings
+- **check-added-large-files** - Prevent large files from being committed
 - **check-ast** - Validate Python syntax
+- **check-builtin-literals** - Forbid builtin type constructor calls when literals are available
+- **debug-statements** - Check for debugger imports and breakpoint() calls
+- **check-json** - Verify JSON syntax
+- **check-yaml** - Verify YAML syntax
+- **pretty-format-json** - Auto-format JSON files
 - **mypy** - Type checking
+- **basedpyright** - Type checking
+- **check-claude-attribution** - Prevent commits with Claude attribution (commit-msg stage)
 
 Run all hooks manually:
 

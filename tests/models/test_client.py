@@ -16,7 +16,7 @@ SAMPLE_CLIENT = {
     '_id': '507f1f77bcf86cd799439022',
     'mac': '11:22:33:44:55:66',
     'name': 'iPhone',
-    'hostname': 'iphone-jonathan',
+    'hostname': 'iphone-user',
     'oui': 'Apple',
     'site_id': '5a32aa4ee4b0412345678901',
     'ip': '192.168.1.50',
@@ -50,7 +50,7 @@ class TestClient:
         assert client.id == '507f1f77bcf86cd799439022'
         assert client.mac == '11:22:33:44:55:66'
         assert client.name == 'iPhone'
-        assert client.hostname == 'iphone-jonathan'
+        assert client.hostname == 'iphone-user'
         assert client.oui == 'Apple'
 
     def test_network(self) -> None:

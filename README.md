@@ -98,7 +98,7 @@ This means SSH works even if you can't directly reach the device's SSH port - th
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.14+
 - A UniFi controller (tested with UniFi Network Application 8.x)
 - For SSH: the target device must support the WebRTC debug terminal (most UniFi devices do)
 
