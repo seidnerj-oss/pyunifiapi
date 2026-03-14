@@ -106,6 +106,10 @@ src/pyunifiapi/
 - Do NOT add ANY AI attribution messages or tool references to commit messages
 - **ALWAYS split unrelated changes into separate commits** - group files by logical change (e.g., a config file change in one commit, a code refactor in another). Do not glob everything into a single commit unless all changes are part of the same logical unit of work
 
+## Remote Hosts
+
+- **NEVER run `sudo` commands via SSH** - they will fail because a TTY cannot be allocated and no password can be provided interactively. Instead, tell the user what command to run manually.
+
 ## Key Design Decisions
 
 - **Two WebRTC modes**: SSH mode (device creates offer, we answer) vs Cloud mode (we create offer with 'api' channel)
