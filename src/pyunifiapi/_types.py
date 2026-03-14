@@ -28,6 +28,7 @@ class CloudConfig:
     password: str
     device_id: str
     totp_secret: str | None = None
+    site: str = DEFAULT_SITE
 
 
 @dataclass(frozen=True)

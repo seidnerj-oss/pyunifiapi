@@ -7,9 +7,13 @@ DEFAULT_SSH_USERNAME = 'ubnt'
 DEFAULT_SSH_PASSWORD = 'ubnt'
 
 # Ubiquiti cloud endpoints
-CLOUD_SSO_URL = 'https://sso.ubnt.com/api/sso/v1'
-CLOUD_DEVICE_URL = 'https://device-airos.svc.ubnt.com/api/airos/v1/unifi'
+CLOUD_SSO_URL = 'https://sso.ui.com/api/sso/v1'
+CLOUD_ACCESS_URL = 'https://cloudaccess.svc.ui.com'
+CLOUD_IOT_HOST = 'a1ewuiz2p7wdvw-ats.iot.us-west-2.amazonaws.com'
+CLOUD_IOT_REGION = 'us-west-2'
+# Legacy (deprecated, does not resolve)
 CLOUD_WSS_URL = 'wss://device-airos.svc.ubnt.com/api/airos/v1/unifi/events'
+CLOUD_DEVICE_URL = 'https://device-airos.svc.ubnt.com/api/airos/v1/unifi'
 
 # SDP polling
 SDP_POLL_MAX_RETRIES = 10
