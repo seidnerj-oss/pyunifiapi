@@ -1,6 +1,6 @@
 """SDP/ICE signaling for cloud API via WebSocket.
 
-Uses the Ubiquiti cloud WebSocket at wss://device-airos.svc.ubnt.com
+Uses the Ubiquiti cloud WebSocket at wss://cloudaccess.svc.ui.com
 for SDP exchange when establishing WebRTC connections through the cloud.
 """
 
