@@ -15,6 +15,7 @@ from pyunifiapi._exceptions import (
 from pyunifiapi._types import CloudConfig, ControllerConfig, SSHConfig, TurnCredentials
 from pyunifiapi.client import UnifiClient
 from pyunifiapi.cloud import CloudClient
+from pyunifiapi.cloud_controller import CloudController
 from pyunifiapi.controller import Controller
 from pyunifiapi.ssh.session import SSHSession
 
@@ -23,6 +24,7 @@ __all__ = [
     'AuthenticationError',
     'CloudClient',
     'CloudConfig',
+    'CloudController',
     'Controller',
     'ControllerConfig',
     'LoginRequired',
