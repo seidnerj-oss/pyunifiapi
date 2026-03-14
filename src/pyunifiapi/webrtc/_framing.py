@@ -1,109 +1,174 @@
-"""Binary message framing protocol for cloud API data channel.
+"""Binme framing protocol for cloud API data channel.
 
-Wire format (big-endian):
-    Bytes 0-3:   Total length (uint32, excluding these 4 bytes)
-    Bytes 4-11:  Message ID (uint64)
-    Bytes 12-15: Request/response JSON length (uint32)
-    Bytes 16-N:  JSON string (UTF-8)
-    Bytes N-end: Data payload
+The binme protocol is a streaming binary format. Data arrives in arbitrary
+chunks across data channel messages. Each logical message consists of two
+parts (header + body), each with an 8-byte part header:
 
-This protocol is used to multiplex REST API requests/responses
-over a single WebRTC data channel in cloud API mode.
+    Part header (8 bytes):
+        Byte 0:    type (1=HEADER, 2=BODY)
+        Byte 1:    format (1=JSON, 2=STRING, 3=BINARY)
+        Byte 2:    compressed (0 or 1, zlib deflate)
+        Byte 3:    reserved (0)
+        Bytes 4-7: data length (uint32 BE)
+
+    Followed by `length` bytes of data.
+
+API requests use:
+    Header: {"id":"<uuid>","type":"httpRequest","path":"/api/...","method":"GET","headers":{...}}
+    Body: request payload (empty for GET)
+
+API responses use:
+    Header: {"id":"<uuid>","type":"httpResponse","statusCode":200,...}
+    Body: response payload (JSON)
 """
 
 from __future__ import annotations
 
 import json
 import struct
+import uuid as uuid_mod
 import zlib
 from dataclasses import dataclass, field
 
-HEADER_FORMAT = '>IQI'  # total_len (uint32), msg_id (uint64), json_len (uint32)
-HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 16 bytes
-LENGTH_PREFIX_SIZE = 4  # The total_len field itself
+TYPE_HEADER = 1
+TYPE_BODY = 2
+FORMAT_JSON = 1
+FORMAT_STRING = 2
+FORMAT_BINARY = 3
+
+PART_HDR_SIZE = 8
 
 
 @dataclass
 class FramedMessage:
-    """A decoded message from the data channel."""
+    """A decoded binme message."""
 
-    message_id: int
-    metadata: dict = field(default_factory=dict)
-    payload: bytes = b''
+    header: dict = field(default_factory=dict)
+    body: bytes = b''
+
+    @property
+    def request_id(self) -> str:
+        return self.header.get('id', '')
 
 
-def encode_frame(message_id: int, metadata: dict, payload: bytes = b'') -> bytes:
-    """Encode a framed message for the data channel.
+def _compress(data: bytes) -> bytes:
+    return zlib.compress(data)
 
-    Args:
-        message_id: Incrementing message ID for request/response matching.
-        metadata: JSON-serializable dict (path, method, contentType, etc.).
-        payload: Optional data payload (JSON string or binary).
 
-    Returns:
-        The encoded binary frame.
+def encode_frame(message_id: int, metadata: dict, payload: bytes = b'') -> tuple[bytes, str]:
+    """Encode an API request in binme format.
+
+    Returns (frame_bytes, request_id).
     """
-    json_bytes = json.dumps(metadata).encode('utf-8')
-    json_len = len(json_bytes)
-    total_len = 8 + 4 + json_len + len(payload)  # msg_id + json_len_field + json + payload
+    request_id = str(uuid_mod.uuid4())
 
-    header = struct.pack('>I', total_len) + struct.pack('>QI', message_id, json_len)
-    return header + json_bytes + payload
+    header_obj = {
+        'id': request_id,
+        'type': 'httpRequest',
+        'path': metadata.get('path', '/'),
+        'method': metadata.get('method', 'GET'),
+        'headers': metadata.get('headers', {'content-length': len(payload)}),
+    }
 
+    header_json = json.dumps(header_obj).encode('utf-8')
+    header_compressed = _compress(header_json)
 
-def decode_frame(data: bytes) -> FramedMessage:
-    """Decode a single framed message from raw bytes.
+    body_data = payload or b''
+    body_compressed = _compress(body_data)
 
-    The data must include the 4-byte length prefix.
+    result = bytearray()
 
-    Raises:
-        ValueError: If the data is too short or malformed.
-    """
-    if len(data) < LENGTH_PREFIX_SIZE + HEADER_SIZE - LENGTH_PREFIX_SIZE:
-        raise ValueError(f'Frame too short: {len(data)} bytes')
+    result.append(TYPE_HEADER)
+    result.append(FORMAT_JSON)
+    result.append(1)
+    result.append(0)
+    result.extend(struct.pack('>I', len(header_compressed)))
+    result.extend(header_compressed)
 
-    total_len = struct.unpack('>I', data[:4])[0]
-    msg_id, json_len = struct.unpack('>QI', data[4:16])
+    result.append(TYPE_BODY)
+    result.append(FORMAT_BINARY)
+    result.append(1)
+    result.append(0)
+    result.extend(struct.pack('>I', len(body_compressed)))
+    result.extend(body_compressed)
 
-    if len(data) < 16 + json_len:
-        raise ValueError(f'Frame truncated: expected {16 + json_len} bytes, got {len(data)}')
-
-    json_bytes = data[16 : 16 + json_len]
-    metadata = json.loads(json_bytes.decode('utf-8'))
-
-    payload = data[16 + json_len : 4 + total_len]
-
-    # Decompress gzip payload if indicated
-    content_encoding = metadata.get('Content-Encoding', '')
-    if content_encoding == 'gzip' and payload:
-        payload = zlib.decompress(payload, zlib.MAX_WBITS | 16)
-
-    return FramedMessage(message_id=msg_id, metadata=metadata, payload=payload)
+    return bytes(result), request_id
 
 
-class FrameBuffer:
-    """Accumulates incoming bytes and yields complete frames.
+class BinmeStreamParser:
+    """Streaming binme parser that accumulates bytes across data channel messages.
 
-    Handles partial reads - the data channel may deliver fragments.
+    Feeds raw bytes and emits complete FramedMessage objects.
+    Handles the case where a single binme frame spans multiple DC messages.
     """
 
     def __init__(self) -> None:
         self._buffer = bytearray()
+        self._header: dict = {}
+        self._header_done = False
+        self._body: bytes = b''
+        self._body_done = False
+        self._current_part_type: int = 0
+        self._current_part_fmt: int = 0
+        self._current_part_compressed: bool = False
+        self._current_part_len: int = 0
+        self._current_part_data = bytearray()
+        self._reading_part_header = True
+        self._parts_completed = 0
 
     def feed(self, data: bytes) -> list[FramedMessage]:
-        """Feed incoming data and return any complete frames."""
+        """Feed raw bytes and return any complete messages."""
         self._buffer.extend(data)
-        frames = []
+        results = []
 
-        while len(self._buffer) >= LENGTH_PREFIX_SIZE:
-            total_len = struct.unpack('>I', self._buffer[:4])[0]
-            frame_size = LENGTH_PREFIX_SIZE + total_len
+        while self._buffer:
+            if self._reading_part_header:
+                if len(self._buffer) < PART_HDR_SIZE:
+                    break
+                self._current_part_type = self._buffer[0]
+                self._current_part_fmt = self._buffer[1]
+                self._current_part_compressed = self._buffer[2] != 0
+                self._current_part_len = struct.unpack('>I', self._buffer[4:8])[0]
+                self._current_part_data = bytearray()
+                self._buffer = self._buffer[PART_HDR_SIZE:]
+                self._reading_part_header = False
 
-            if len(self._buffer) < frame_size:
-                break  # Incomplete frame, wait for more data
+            needed = self._current_part_len - len(self._current_part_data)
+            available = min(needed, len(self._buffer))
+            self._current_part_data.extend(self._buffer[:available])
+            self._buffer = self._buffer[available:]
 
-            frame_data = bytes(self._buffer[:frame_size])
-            self._buffer = self._buffer[frame_size:]
-            frames.append(decode_frame(frame_data))
+            if len(self._current_part_data) >= self._current_part_len:
+                part_bytes = bytes(self._current_part_data)
+                if self._current_part_compressed and part_bytes:
+                    part_bytes = zlib.decompress(part_bytes)
 
-        return frames
+                if self._current_part_type == TYPE_HEADER:
+                    if self._current_part_fmt == FORMAT_JSON and part_bytes:
+                        self._header = json.loads(part_bytes.decode('utf-8'))
+                    self._header_done = True
+                elif self._current_part_type == TYPE_BODY:
+                    self._body = part_bytes
+                    self._body_done = True
+
+                self._parts_completed += 1
+                self._reading_part_header = True
+
+                if self._header_done and self._body_done:
+                    results.append(FramedMessage(header=self._header, body=self._body))
+                    self._header = {}
+                    self._body = b''
+                    self._header_done = False
+                    self._body_done = False
+                    self._parts_completed = 0
+
+        return results
+
+
+def decode_response(data: bytes) -> FramedMessage:
+    """Decode a complete binme message (convenience for single-message frames)."""
+    parser = BinmeStreamParser()
+    results = parser.feed(data)
+    if results:
+        return results[0]
+    return FramedMessage()
