@@ -106,14 +106,16 @@ class Controller:
         logger.info('Connected to controller (UniFi OS: %s)', self._session.is_unifi_os)
 
     async def _detect_unifi_os(self) -> bool:
-        """Detect whether the controller runs UniFi OS (Dream Machine, etc.)."""
+        """Detect whether the controller runs UniFi OS (Dream Machine, UCG, UDR, etc.).
+
+        Checks multiple indicators:
+        1. GET / returns JSON with 'meta' field (classic detection)
+        2. GET /api/system returns JSON (UniFi OS system endpoint)
+        """
         assert self._http is not None
         try:
             resp = await self._http.get('/')
-            # UniFi OS controllers return x-csrf-token in initial response
-            # and have specific response patterns
             content_type = resp.headers.get('content-type', '')
-            # UniFi OS returns application/json for the root endpoint
             if 'application/json' in content_type:
                 try:
                     data = resp.json()
@@ -121,6 +123,12 @@ class Controller:
                         return True
                 except (ValueError, TypeError):
                     pass
+
+            # Fallback: check if /api/system exists (UniFi OS only)
+            resp = await self._http.get('/api/system')
+            content_type = resp.headers.get('content-type', '')
+            if 'application/json' in content_type and resp.status_code == 200:
+                return True
         except Exception:
             logger.debug('UniFi OS detection failed, assuming classic controller')
         return False
