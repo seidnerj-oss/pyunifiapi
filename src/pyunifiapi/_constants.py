@@ -1,4 +1,4 @@
-"""Constants for py-unifiapi."""
+"""Constants for pyunifiapi."""
 
 # Default controller settings
 DEFAULT_CONTROLLER_PORT = 443

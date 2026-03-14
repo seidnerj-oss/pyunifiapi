@@ -1,4 +1,4 @@
-"""Shared test fixtures for py-unifiapi tests."""
+"""Shared test fixtures for pyunifiapi tests."""
 
 from __future__ import annotations
 

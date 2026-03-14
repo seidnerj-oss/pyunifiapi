@@ -1,4 +1,4 @@
-"""Shared data types for py-unifiapi."""
+"""Shared data types for pyunifiapi."""
 
 from __future__ import annotations
 

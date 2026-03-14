@@ -1,8 +1,8 @@
-"""Exception hierarchy for py-unifiapi."""
+"""Exception hierarchy for pyunifiapi."""
 
 
 class PyUnifiApiError(Exception):
-    """Base exception for all py-unifiapi errors."""
+    """Base exception for all pyunifiapi errors."""
 
 
 class AuthenticationError(PyUnifiApiError):

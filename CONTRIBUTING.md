@@ -1,11 +1,11 @@
-# Contributing to py-unifiapi
+# Contributing to pyunifiapi
 
 ## Development Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/seidnerj/py-unifiapi.git
-cd py-unifiapi
+git clone https://github.com/seidnerj/pyunifiapi.git
+cd pyunifiapi
 
 # Install dependencies (requires uv)
 uv sync --group dev

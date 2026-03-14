@@ -1,4 +1,4 @@
-"""py-unifiapi - Python client for UniFi Network controller and cloud API over WebRTC."""
+"""pyunifiapi - Python client for UniFi Network controller and cloud API over WebRTC."""
 
 from pyunifiapi._exceptions import (
     ApiConnectionError,

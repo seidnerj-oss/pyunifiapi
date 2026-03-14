@@ -1,4 +1,4 @@
-# py-unifiapi
+# pyunifiapi
 
 Python client for UniFi Network controller and cloud API over WebRTC.
 
@@ -15,13 +15,13 @@ Provides programmatic access to UniFi devices - REST API, SSH sessions via the c
 ## Installation
 
 ```bash
-pip install py-unifiapi
+pip install pyunifiapi
 ```
 
 Or with uv:
 
 ```bash
-uv add py-unifiapi
+uv add pyunifiapi
 ```
 
 ## Quick Start

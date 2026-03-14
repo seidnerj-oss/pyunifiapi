@@ -1,4 +1,4 @@
-# Pre-commit configuration for py-unifiapi
+# Pre-commit configuration for pyunifiapi
 # Install with: uv run pre-commit install
 # Run manually with: uv run pre-commit run --all-files
 
