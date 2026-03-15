@@ -45,7 +45,7 @@ class CloudClient:
         self._signaling: MqttSignaling | None = None
         self._peer: PeerConnection | None = None
         self._message_id_counter = 0
-        self._pending: dict[int, asyncio.Future[dict]] = {}
+        self._pending: dict[str, asyncio.Future[dict]] = {}
         self._connected = False
 
     async def __aenter__(self) -> CloudClient:
@@ -56,17 +56,11 @@ class CloudClient:
         await self.close()
 
     async def connect(self) -> None:
-        """Full cloud connection flow: SSO -> MQTT signaling -> WebRTC.
-
-        Uses legacy signaling (HTTP POST + MQTT) for NetServer controllers
-        (UCG Ultra, UDM, UDR, etc.), which covers all UniFi OS controllers.
-        """
-        # Step 1: SSO login and get AWS credentials + TURN credentials
+        """Full cloud connection flow: SSO -> MQTT signaling -> WebRTC."""
         self._cloud_http = CloudHttpTransport(self._config)
         await self._cloud_http.sso_login()
         turn = await self._cloud_http.get_turn_credentials(self._config.device_id)
 
-        # Step 2: Connect to MQTT signaling (AWS IoT)
         assert self._cloud_http._aws_credentials is not None
         self._signaling = MqttSignaling(
             aws_credentials=self._cloud_http._aws_credentials,
@@ -74,18 +68,13 @@ class CloudClient:
         )
         await self._signaling.connect()
 
-        # Step 3: Create WebRTC peer connection with placeholder channel
-        # The placeholder triggers SDP negotiation; actual API channels are created after
         self._peer = PeerConnection(turn)
-        self._peer._pc = self._peer._create_pc()
-        placeholder = self._peer._pc.createDataChannel('placeholder', ordered=True)
-        self._peer._data_channel = placeholder
-        self._peer._setup_channel_handlers(placeholder)
+        offer_sdp, local_candidates = await self._peer.create_offer('placeholder')
 
-        # Step 4: Exchange SDP via cloud signaling (trickle ICE over MQTT)
         answer = await self._signaling.exchange_sdp(
             host_id=self._config.device_id,
-            pc=self._peer._pc,
+            offer_sdp=offer_sdp,
+            local_candidates=local_candidates,
             turn=turn,
         )
 
@@ -93,53 +82,21 @@ class CloudClient:
         if not remote_sdp:
             raise WebRTCError(f'Empty SDP answer from cloud device. Response: {answer}')
 
-        # Step 5: Set remote description, add remote ICE candidates, wait for channel
-        from aiortc import RTCSessionDescription
-        await self._peer._pc.setRemoteDescription(
-            RTCSessionDescription(sdp=remote_sdp, type='answer')
-        )
-
-        # Add remote ICE candidates (trickle ICE)
-        from aioice.candidate import Candidate as AioIceCandidate
-        from aiortc.rtcicetransport import candidate_from_aioice
-
-        for ice in answer.get('ice_candidates', []):
-            candidate_str = ice.get('candidate', '')
-            if candidate_str:
-                candidate_str = candidate_str.replace('a=', '', 1)
-                try:
-                    aioice_candidate = AioIceCandidate.from_sdp(candidate_str)
-                    rtc_candidate = candidate_from_aioice(aioice_candidate)
-                    rtc_candidate.sdpMid = '0'
-                    rtc_candidate.sdpMLineIndex = 0
-                    await self._peer._pc.addIceCandidate(rtc_candidate)
-                    logger.debug('Added remote ICE candidate: %s:%d (%s)', rtc_candidate.ip, rtc_candidate.port, rtc_candidate.type)
-                except Exception as e:
-                    logger.debug('Failed to add remote ICE candidate: %s', e)
-
+        remote_candidates = [ice.get('candidate', '') for ice in answer.get('ice_candidates', []) if ice.get('candidate')]
+        await self._peer.accept_answer(remote_sdp, remote_candidates)
         await self._peer.wait_for_channel(timeout=30.0)
 
-        # Create the actual API data channel after placeholder is open
-        api_channel = self._peer._pc.createDataChannel('api:1', ordered=True)
-        self._peer._data_channel = api_channel
+        api_channel = self._peer.create_data_channel('api:1')
+        self._peer.data_channel = api_channel
 
         api_open = asyncio.Event()
+        loop = asyncio.get_event_loop()
 
-        @api_channel.on('open')
         def on_api_open() -> None:
-            api_open.set()
+            loop.call_soon_threadsafe(api_open.set)
 
-        if getattr(api_channel, 'readyState', None) == 'open':
-            api_open.set()
-        else:
-            await asyncio.wait_for(api_open.wait(), timeout=10.0)
-
-        channel = api_channel
-
-        # Streaming binme parser handles chunked responses across DC messages
         stream_parser = BinmeStreamParser()
 
-        @channel.on('message')
         def on_api_message(data: bytes | str) -> None:
             if isinstance(data, str):
                 data = data.encode('utf-8')
@@ -147,7 +104,15 @@ class CloudClient:
                 request_id = frame.request_id
                 future = self._pending.pop(request_id, None)
                 if future and not future.done():
-                    self._resolve_response(future, frame.body)
+                    loop.call_soon_threadsafe(self._resolve_response, future, frame.body)
+
+        api_channel.on_open(on_api_open)
+        api_channel.on_message(on_api_message)
+
+        if api_channel.is_open():
+            api_open.set()
+        else:
+            await asyncio.wait_for(api_open.wait(), timeout=10.0)
 
         self._connected = True
         logger.info('Cloud API connection established to device %s', self._config.device_id)
@@ -155,6 +120,8 @@ class CloudClient:
     @staticmethod
     def _resolve_response(future: asyncio.Future, body: bytes) -> None:
         """Parse response body and resolve the future."""
+        if future.done():
+            return
         if body:
             try:
                 future.set_result(json.loads(body.decode('utf-8')))

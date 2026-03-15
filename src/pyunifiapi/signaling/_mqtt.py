@@ -133,19 +133,19 @@ def _parse_packet(data: bytes) -> tuple[int, int, bytes, int]:
     flags = byte0 & 0x0F
     remaining_length, len_bytes = _decode_remaining_length(data, 1)
     header_len = 1 + len_bytes
-    payload = data[header_len:header_len + remaining_length]
+    payload = data[header_len : header_len + remaining_length]
     return packet_type, flags, payload, header_len + remaining_length
 
 
 def _parse_publish_packet(flags: int, payload: bytes) -> tuple[str, bytes, int | None]:
     """Parse a PUBLISH packet payload. Returns (topic, message, packet_id)."""
     topic_len = struct.unpack('!H', payload[:2])[0]
-    topic = payload[2:2 + topic_len].decode('utf-8')
+    topic = payload[2 : 2 + topic_len].decode('utf-8')
     offset = 2 + topic_len
     qos = (flags >> 1) & 0x03
     packet_id = None
     if qos > 0:
-        packet_id = struct.unpack('!H', payload[offset:offset + 2])[0]
+        packet_id = struct.unpack('!H', payload[offset : offset + 2])[0]
         offset += 2
     message = payload[offset:]
     return topic, message, packet_id
@@ -181,7 +181,7 @@ def _build_mqtt_wss_url(
     host: str = CLOUD_IOT_HOST,
 ) -> str:
     """Build a SigV4 presigned WebSocket URL for AWS IoT MQTT."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     datestamp = now.strftime('%Y%m%d')
     amz_date = now.strftime('%Y%m%dT%H%M%SZ')
     service = 'iotdevicegateway'
@@ -196,35 +196,35 @@ def _build_mqtt_wss_url(
         'X-Amz-Date': amz_date,
         'X-Amz-SignedHeaders': 'host',
     }
-    canonical_querystring = '&'.join(
-        f'{quote(k, safe="")}={quote(v, safe="")}' for k, v in sorted(query_params.items())
-    )
+    canonical_querystring = '&'.join(f'{quote(k, safe="")}={quote(v, safe="")}' for k, v in sorted(query_params.items()))
 
     # Canonical request
-    canonical_request = '\n'.join([
-        'GET',
-        '/mqtt',
-        canonical_querystring,
-        f'host:{host}\n',
-        'host',
-        hashlib.sha256(b'').hexdigest(),
-    ])
+    canonical_request = '\n'.join(
+        [
+            'GET',
+            '/mqtt',
+            canonical_querystring,
+            f'host:{host}\n',
+            'host',
+            hashlib.sha256(b'').hexdigest(),
+        ]
+    )
 
     # String to sign
-    string_to_sign = '\n'.join([
-        'AWS4-HMAC-SHA256',
-        amz_date,
-        credential_scope,
-        hashlib.sha256(canonical_request.encode('utf-8')).hexdigest(),
-    ])
+    string_to_sign = '\n'.join(
+        [
+            'AWS4-HMAC-SHA256',
+            amz_date,
+            credential_scope,
+            hashlib.sha256(canonical_request.encode('utf-8')).hexdigest(),
+        ]
+    )
 
     # Signing key
     def _sign(key: bytes, msg: str) -> bytes:
         return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
 
-    signing_key = _sign(_sign(_sign(_sign(
-        f'AWS4{secret_key}'.encode('utf-8'), datestamp),
-        region), service), 'aws4_request')
+    signing_key = _sign(_sign(_sign(_sign(f'AWS4{secret_key}'.encode(), datestamp), region), service), 'aws4_request')
 
     signature = hmac.new(signing_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
 
@@ -404,24 +404,25 @@ class MqttSignaling:
     async def exchange_sdp(
         self,
         host_id: str,
-        pc: Any,
+        offer_sdp: str,
+        local_candidates: list[str],
         turn: TurnCredentials,
         ice_servers: list[dict] | None = None,
     ) -> dict:
         """Exchange SDP offer/answer with a cloud-connected controller (cloud signaling).
 
-        Creates MQTT topics, subscribes for the answer, creates and publishes
-        the SDP offer immediately (before ICE gathering), then publishes ICE
-        candidates incrementally as they arrive (trickle ICE).
+        Publishes the pre-computed SDP offer and ICE candidates, then waits
+        for the remote answer and remote ICE candidates via MQTT.
 
         Args:
             host_id: The controller's cloud device ID.
-            pc: The aiortc RTCPeerConnection instance.
+            offer_sdp: The local SDP offer string.
+            local_candidates: List of local ICE candidate strings.
             turn: TURN credentials for ICE.
             ice_servers: Optional ICE server config for the offer message.
 
         Returns:
-            Dict with the controller's SDP answer.
+            Dict with the controller's SDP answer and ice_candidates.
         """
         connection_id = uuid_mod.uuid4().hex[:16]
         base_path = f'client/{self._identity_id}'
@@ -431,57 +432,39 @@ class MqttSignaling:
         await self._subscribe(sub_topic)
 
         stun_uri = turn.stun_urls[0] if turn.stun_urls else 'stun:stun.cloudflare.com:3478'
-        ice_server_cfg = ice_servers or [{
-            'urls': [stun_uri] + turn.turn_urls,
-            'username': turn.turn_username,
-            'credential': turn.turn_password,
-        }]
+        ice_server_cfg = ice_servers or [
+            {
+                'urls': [stun_uri] + turn.turn_urls,
+                'username': turn.turn_username,
+                'credential': turn.turn_password,
+            }
+        ]
 
-        return await self._trickle_ice_exchange(pc, pub_topic, sub_topic, host_id, ice_server_cfg)
-
-    async def _trickle_ice_exchange(
-        self,
-        pc: Any,
-        pub_topic: str,
-        sub_topic: str,
-        host_id: str,
-        ice_servers: list[dict],
-    ) -> dict:
-        """Run trickle ICE exchange: send offer, publish local candidates, receive answer + remote candidates."""
         seq = 0
-
-        from aiortc import RTCSessionDescription
-        offer = await pc.createOffer()
-        await pc.setLocalDescription(offer)
-
-        # Publish offer immediately (before ICE gathering completes)
-        offer_msg = {
-            'event': 'offer',
-            'seq': seq,
-            'offer': pc.localDescription.sdp,
-            'iceServers': ice_servers,
-        }
+        await self._publish(
+            pub_topic,
+            {
+                'event': 'offer',
+                'seq': seq,
+                'offer': offer_sdp,
+                'iceServers': ice_server_cfg,
+            },
+        )
         seq += 1
-        await self._publish(pub_topic, offer_msg)
         logger.debug('Published offer (seq=0)')
 
-        # Publish local ICE candidates as they arrive
-        @pc.on('icecandidate')
-        async def on_ice_candidate(candidate: Any) -> None:
-            nonlocal seq
-            if candidate is None:
-                return
-            candidate_str = candidate.to_sdp() if hasattr(candidate, 'to_sdp') else str(candidate)
-            msg = {
-                'event': 'icecandidate',
-                'seq': seq,
-                'candidate': candidate_str,
-            }
+        for candidate_str in local_candidates:
+            await self._publish(
+                pub_topic,
+                {
+                    'event': 'icecandidate',
+                    'seq': seq,
+                    'candidate': candidate_str,
+                },
+            )
             seq += 1
-            await self._publish(pub_topic, msg)
-            logger.debug('Published local ICE candidate (seq=%d)', seq - 1)
+        logger.debug('Published %d local ICE candidates', len(local_candidates))
 
-        # Wait for the SDP answer AND collect remote ICE candidates
         queue = self._topic_handlers[sub_topic]
         answer: dict | None = None
         remote_candidates: list[dict] = []
@@ -494,7 +477,6 @@ class MqttSignaling:
                 if event == 'answer':
                     answer = msg
                     logger.debug('Received SDP answer')
-                    # After answer, collect ICE candidates with shorter timeout
                     try:
                         while True:
                             msg = await asyncio.wait_for(queue.get(), timeout=5.0)
@@ -509,7 +491,6 @@ class MqttSignaling:
                     break
 
                 elif event == 'icecandidate':
-                    # Candidates arriving before answer
                     remote_candidates.append(msg)
 
                 elif event == 'sdpcomplete':

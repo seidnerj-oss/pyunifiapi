@@ -11,9 +11,9 @@ requires-python = ">=3.14"
 license = { text = "MIT" }
 dependencies = [
     "httpx",
-    "aiortc",
     "pyotp",
     "websockets",
+    "libdatachannel-py>=2025.1.2",
 ]
 
 [project.scripts]

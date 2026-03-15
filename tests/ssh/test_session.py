@@ -8,8 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from pyunifiapi._exceptions import SSHSessionError
-from pyunifiapi._types import ControllerConfig, SSHConfig, TurnCredentials
+from pyunifiapi._types import CloudConfig, ControllerConfig, SSHConfig, TurnCredentials
 from pyunifiapi.ssh.session import SSHSession
+
+# Patch targets: PeerConnection is a module-level import in session.py,
+# others are lazy (imported inside methods) and patched at their source modules.
+PEER_PATCH = 'pyunifiapi.ssh.session.PeerConnection'
+LOCAL_HTTP_PATCH = 'pyunifiapi.http._local.LocalHttpTransport'
+LOCAL_SIG_PATCH = 'pyunifiapi.signaling._local.LocalSignaling'
+CONTROLLER_PATCH = 'pyunifiapi.controller.Controller'
+CLOUD_CLIENT_PATCH = 'pyunifiapi.cloud.CloudClient'
+CLOUD_SSH_SIG_PATCH = 'pyunifiapi.signaling._cloud_ssh.CloudSSHSignaling'
 
 
 @pytest.fixture
@@ -18,13 +27,18 @@ def controller_config() -> ControllerConfig:
 
 
 @pytest.fixture
+def cloud_config() -> CloudConfig:
+    return CloudConfig(username='admin', password='password', device_id='DEVICE123:999')
+
+
+@pytest.fixture
 def ssh_config() -> SSHConfig:
     return SSHConfig(mac='aa:bb:cc:dd:ee:ff')
 
 
 class TestSSHSession:
-    async def test_connect_flow(self, controller_config: ControllerConfig, ssh_config: SSHConfig) -> None:
-        """Test the full connect orchestration calls the right methods in order."""
+    async def test_connect_local_flow(self, controller_config: ControllerConfig, ssh_config: SSHConfig) -> None:
+        """Test the full local connect orchestration calls the right methods in order."""
         session = SSHSession(controller_config, ssh_config)
 
         turn = TurnCredentials(
@@ -40,18 +54,19 @@ class TestSSHSession:
         mock_signaling.poll_sdp_offer.return_value = 'v=0\r\nfake-offer'
 
         mock_channel = MagicMock()
-        mock_channel.readyState = 'open'
-        mock_channel.on = MagicMock()
-
         mock_peer = AsyncMock()
         mock_peer.accept_offer.return_value = 'v=0\r\nfake-answer'
         mock_peer.wait_for_channel.return_value = mock_channel
         mock_peer.message_queue = asyncio.Queue()
 
+        mock_controller = AsyncMock()
+        mock_controller._detect_unifi_os.return_value = False
+
         with (
-            patch('pyunifiapi.ssh.session.LocalHttpTransport', return_value=mock_http),
-            patch('pyunifiapi.ssh.session.LocalSignaling', return_value=mock_signaling),
-            patch('pyunifiapi.ssh.session.PeerConnection', return_value=mock_peer),
+            patch(LOCAL_HTTP_PATCH, return_value=mock_http),
+            patch(LOCAL_SIG_PATCH, return_value=mock_signaling),
+            patch(PEER_PATCH, return_value=mock_peer),
+            patch(CONTROLLER_PATCH, return_value=mock_controller),
         ):
             await session.connect()
 
@@ -62,6 +77,46 @@ class TestSSHSession:
             mock_signaling.poll_sdp_offer.assert_called_once()
             mock_peer.accept_offer.assert_called_once_with('v=0\r\nfake-offer')
             mock_signaling.send_sdp_answer.assert_called_once()
+
+    async def test_connect_cloud_flow(self, cloud_config: CloudConfig, ssh_config: SSHConfig) -> None:
+        """Test cloud connect passes fallback TURN to CloudSSHSignaling."""
+        session = SSHSession(cloud_config, ssh_config)
+
+        turn = TurnCredentials(
+            stun_urls=['stun:stun.example.com:3478'],
+            turn_urls=['turn:turn.example.com:3478'],
+            turn_username='user',
+            turn_password='pass',
+        )
+
+        mock_cloud_http = AsyncMock()
+        mock_cloud_http.get_turn_credentials.return_value = turn
+
+        mock_cloud_client = AsyncMock()
+        mock_cloud_client._cloud_http = mock_cloud_http
+
+        mock_signaling = AsyncMock()
+        mock_signaling.get_turn_credentials.return_value = turn
+        mock_signaling.poll_sdp_offer.return_value = 'v=0\r\nfake-offer'
+
+        mock_channel = MagicMock()
+        mock_peer = AsyncMock()
+        mock_peer.accept_offer.return_value = 'v=0\r\nfake-answer'
+        mock_peer.wait_for_channel.return_value = mock_channel
+        mock_peer.message_queue = asyncio.Queue()
+
+        with (
+            patch(CLOUD_CLIENT_PATCH, return_value=mock_cloud_client),
+            patch(CLOUD_SSH_SIG_PATCH, return_value=mock_signaling) as mock_sig_cls,
+            patch(PEER_PATCH, return_value=mock_peer),
+        ):
+            await session.connect()
+
+            assert session.connected is True
+            mock_cloud_client.connect.assert_called_once()
+            mock_sig_cls.assert_called_once()
+            call_kwargs = mock_sig_cls.call_args.kwargs
+            assert call_kwargs.get('fallback_turn') == turn
 
     async def test_write_not_connected(self, controller_config: ControllerConfig, ssh_config: SSHConfig) -> None:
         session = SSHSession(controller_config, ssh_config)
@@ -110,7 +165,6 @@ class TestSSHSession:
         session._uuid = 'test-uuid'
         session._connected = True
 
-        # Should not raise
         await session.close()
         assert session.connected is False
 
@@ -126,3 +180,22 @@ class TestSSHSession:
                 mock_connect.assert_called_once()
 
             mock_close.assert_called_once()
+
+    async def test_close_cloud_cleans_up(self, cloud_config: CloudConfig, ssh_config: SSHConfig) -> None:
+        """Close on cloud session should clean up cloud client too."""
+        session = SSHSession(cloud_config, ssh_config)
+
+        mock_signaling = AsyncMock()
+        mock_peer = AsyncMock()
+        mock_cloud_client = AsyncMock()
+
+        session._signaling = mock_signaling
+        session._peer = mock_peer
+        session._cloud_client = mock_cloud_client
+        session._uuid = 'test-uuid'
+        session._connected = True
+
+        await session.close()
+
+        assert session.connected is False
+        mock_cloud_client.close.assert_called_once()

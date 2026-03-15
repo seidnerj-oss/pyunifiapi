@@ -1,134 +1,134 @@
-"""Tests for binary message framing protocol."""
+"""Tests for binme binary framing protocol."""
 
 from __future__ import annotations
 
 import json
 
-import pytest
-
-from pyunifiapi.webrtc._framing import FrameBuffer, decode_frame, encode_frame
+from pyunifiapi.webrtc._framing import BinmeStreamParser, FramedMessage, decode_response, encode_frame
 
 
 class TestEncodeFrame:
     def test_encode_basic(self) -> None:
         metadata = {'path': '/api/test', 'method': 'GET'}
-        frame = encode_frame(1, metadata)
+        frame_bytes, request_id = encode_frame(1, metadata)
 
-        assert isinstance(frame, bytes)
-        assert len(frame) > 16  # At least header + some JSON
+        assert isinstance(frame_bytes, bytes)
+        assert len(frame_bytes) > 16
+        assert isinstance(request_id, str)
+        assert len(request_id) == 36  # UUID format
 
     def test_encode_with_payload(self) -> None:
         metadata = {'path': '/api/test', 'method': 'POST'}
         payload = b'{"key": "value"}'
-        frame = encode_frame(42, metadata, payload)
+        frame_bytes, request_id = encode_frame(42, metadata, payload)
 
-        assert isinstance(frame, bytes)
-        assert len(frame) > 16 + len(payload)
+        assert isinstance(frame_bytes, bytes)
+        assert isinstance(request_id, str)
 
     def test_encode_empty_metadata(self) -> None:
-        frame = encode_frame(1, {})
-        assert isinstance(frame, bytes)
+        frame_bytes, request_id = encode_frame(1, {})
+        assert isinstance(frame_bytes, bytes)
+        assert isinstance(request_id, str)
+
+    def test_unique_request_ids(self) -> None:
+        _, id1 = encode_frame(1, {'path': '/a'})
+        _, id2 = encode_frame(2, {'path': '/b'})
+        assert id1 != id2
 
 
-class TestDecodeFrame:
+class TestDecodeResponse:
     def test_roundtrip(self) -> None:
-        metadata = {'path': '/api/s/default/stat/device', 'method': 'GET', 'contentType': 'application/json'}
+        metadata = {'path': '/api/s/default/stat/device', 'method': 'GET'}
+        frame_bytes, request_id = encode_frame(123, metadata)
+
+        decoded = decode_response(frame_bytes)
+        assert decoded.request_id == request_id
+        assert decoded.header['type'] == 'httpRequest'
+        assert decoded.header['path'] == '/api/s/default/stat/device'
+        assert decoded.header['method'] == 'GET'
+
+    def test_roundtrip_with_payload(self) -> None:
+        metadata = {'path': '/api/test', 'method': 'POST'}
         payload = b'{"data": []}'
-        frame = encode_frame(123, metadata, payload)
-        decoded = decode_frame(frame)
+        frame_bytes, request_id = encode_frame(1, metadata, payload)
 
-        assert decoded.message_id == 123
-        assert decoded.metadata == metadata
-        assert decoded.payload == payload
+        decoded = decode_response(frame_bytes)
+        assert decoded.request_id == request_id
 
-    def test_roundtrip_no_payload(self) -> None:
-        metadata = {'path': '/api/test'}
-        frame = encode_frame(1, metadata)
-        decoded = decode_frame(frame)
-
-        assert decoded.message_id == 1
-        assert decoded.metadata == metadata
-        assert decoded.payload == b''
-
-    def test_roundtrip_large_message_id(self) -> None:
-        metadata = {'test': True}
-        frame = encode_frame(2**32 + 1, metadata)
-        decoded = decode_frame(frame)
-        assert decoded.message_id == 2**32 + 1
-
-    def test_decode_too_short(self) -> None:
-        with pytest.raises(ValueError, match='too short'):
-            decode_frame(b'\x00\x00')
-
-    def test_decode_truncated(self) -> None:
-        metadata = {'path': '/api/test'}
-        frame = encode_frame(1, metadata)
-        # Truncate after the header but before the JSON payload is complete
-        with pytest.raises(ValueError, match='truncated'):
-            decode_frame(frame[:20])
+    def test_empty_data(self) -> None:
+        decoded = decode_response(b'')
+        assert decoded.header == {}
+        assert decoded.body == b''
 
 
-class TestFrameBuffer:
+class TestBinmeStreamParser:
     def test_single_complete_frame(self) -> None:
-        metadata = {'path': '/api/test'}
-        frame = encode_frame(1, metadata)
+        metadata = {'path': '/api/test', 'method': 'GET'}
+        frame_bytes, request_id = encode_frame(1, metadata)
 
-        buf = FrameBuffer()
-        frames = buf.feed(frame)
+        parser = BinmeStreamParser()
+        frames = parser.feed(frame_bytes)
 
         assert len(frames) == 1
-        assert frames[0].message_id == 1
-        assert frames[0].metadata == metadata
+        assert frames[0].request_id == request_id
 
     def test_multiple_frames_at_once(self) -> None:
-        frame1 = encode_frame(1, {'path': '/first'})
-        frame2 = encode_frame(2, {'path': '/second'})
+        frame1, id1 = encode_frame(1, {'path': '/first', 'method': 'GET'})
+        frame2, id2 = encode_frame(2, {'path': '/second', 'method': 'GET'})
 
-        buf = FrameBuffer()
-        frames = buf.feed(frame1 + frame2)
+        parser = BinmeStreamParser()
+        frames = parser.feed(frame1 + frame2)
 
         assert len(frames) == 2
-        assert frames[0].message_id == 1
-        assert frames[1].message_id == 2
+        assert frames[0].request_id == id1
+        assert frames[1].request_id == id2
 
     def test_partial_frame(self) -> None:
-        frame = encode_frame(1, {'path': '/api/test'}, b'payload-data')
+        frame_bytes, request_id = encode_frame(1, {'path': '/api/test', 'method': 'GET'}, b'payload-data')
 
-        buf = FrameBuffer()
+        parser = BinmeStreamParser()
 
-        # Feed first half
-        mid = len(frame) // 2
-        frames = buf.feed(frame[:mid])
-        assert len(frames) == 0  # Incomplete
+        mid = len(frame_bytes) // 2
+        frames = parser.feed(frame_bytes[:mid])
+        assert len(frames) == 0
 
-        # Feed second half
-        frames = buf.feed(frame[mid:])
+        frames = parser.feed(frame_bytes[mid:])
         assert len(frames) == 1
-        assert frames[0].message_id == 1
+        assert frames[0].request_id == request_id
 
     def test_byte_by_byte(self) -> None:
-        frame = encode_frame(1, {'test': True})
+        frame_bytes, request_id = encode_frame(1, {'path': '/test', 'method': 'GET'})
 
-        buf = FrameBuffer()
+        parser = BinmeStreamParser()
         frames = []
-        for byte in frame:
-            frames.extend(buf.feed(bytes([byte])))
+        for byte in frame_bytes:
+            frames.extend(parser.feed(bytes([byte])))
 
         assert len(frames) == 1
-        assert frames[0].message_id == 1
+        assert frames[0].request_id == request_id
 
     def test_empty_feed(self) -> None:
-        buf = FrameBuffer()
-        assert buf.feed(b'') == []
+        parser = BinmeStreamParser()
+        assert parser.feed(b'') == []
 
-    def test_frame_with_payload_roundtrip(self) -> None:
-        metadata = {'contentType': 'application/json'}
+    def test_frame_with_json_payload(self) -> None:
+        metadata = {'path': '/api/devices', 'method': 'GET'}
         payload = json.dumps({'data': [{'mac': 'aa:bb:cc:dd:ee:ff'}]}).encode('utf-8')
+        frame_bytes, request_id = encode_frame(99, metadata, payload)
 
-        frame = encode_frame(99, metadata, payload)
-        buf = FrameBuffer()
-        frames = buf.feed(frame)
+        parser = BinmeStreamParser()
+        frames = parser.feed(frame_bytes)
 
         assert len(frames) == 1
-        assert frames[0].message_id == 99
-        assert json.loads(frames[0].payload) == {'data': [{'mac': 'aa:bb:cc:dd:ee:ff'}]}
+        assert frames[0].request_id == request_id
+
+
+class TestFramedMessage:
+    def test_request_id_property(self) -> None:
+        msg = FramedMessage(header={'id': 'test-uuid-123'}, body=b'')
+        assert msg.request_id == 'test-uuid-123'
+
+    def test_empty_header(self) -> None:
+        msg = FramedMessage()
+        assert msg.request_id == ''
+        assert msg.body == b''
