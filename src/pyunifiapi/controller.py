@@ -222,6 +222,16 @@ class Controller:
                 return str(token)
         return ''
 
+    async def refresh_devices(self) -> None:
+        """Re-fetch device data from the controller."""
+        assert self._http is not None
+        is_os = self._session.is_unifi_os
+        site = self._config.site
+        path = f'/proxy/network/api/s/{site}/stat/device' if is_os else f'/api/s/{site}/stat/device'
+        resp = await self._http.get(path)
+        data: list[dict] = resp.json().get('data', [])
+        self.devices.process_full(data)
+
     # --- API actions ---
 
     async def request(self, method: str, path: str, data: dict | None = None) -> list[dict]:

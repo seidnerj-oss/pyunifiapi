@@ -89,6 +89,15 @@ class CloudController:
             self.sites.process_full(results[1])
             logger.debug('Loaded %d sites', len(results[1]))
 
+    async def refresh_devices(self) -> None:
+        """Re-fetch device data from the controller."""
+        site = self.config.site
+        full_path = f'/proxy/network/api/s/{site}/stat/device'
+        resp = await self.request('GET', full_path)
+        if isinstance(resp, dict):
+            data: list[dict] = resp.get('data', [])
+            self.devices.process_full(data)
+
     async def request(self, method: str, path: str, data: dict | None = None) -> dict:
         """Send a REST API request over the WebRTC data channel."""
         assert self._cloud_client is not None
