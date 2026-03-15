@@ -14,10 +14,25 @@ from pyunifiapi._exceptions import (
 )
 from pyunifiapi._types import CloudConfig, ControllerConfig, SSHConfig, TurnCredentials
 from pyunifiapi.client import UnifiClient
-from pyunifiapi.cloud import CloudClient
-from pyunifiapi.cloud_controller import CloudController
 from pyunifiapi.controller import Controller
-from pyunifiapi.ssh.session import SSHSession
+
+
+def __getattr__(name: str):
+    """Lazy imports for cloud/WebRTC modules that require optional dependencies."""
+    if name == 'CloudClient':
+        from pyunifiapi.cloud import CloudClient
+
+        return CloudClient
+    if name == 'CloudController':
+        from pyunifiapi.cloud_controller import CloudController
+
+        return CloudController
+    if name == 'SSHSession':
+        from pyunifiapi.ssh.session import SSHSession
+
+        return SSHSession
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
 
 __all__ = [
     'ApiConnectionError',

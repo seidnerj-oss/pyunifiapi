@@ -13,6 +13,10 @@ dependencies = [
     "httpx",
     "pyotp",
     "websockets",
+]
+
+[project.optional-dependencies]
+cloud = [
     "libdatachannel-py>=2025.1.2",
 ]
 

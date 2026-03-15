@@ -352,9 +352,13 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
-    { name = "libdatachannel-py" },
     { name = "pyotp" },
     { name = "websockets" },
+]
+
+[package.optional-dependencies]
+cloud = [
+    { name = "libdatachannel-py" },
 ]
 
 [package.dev-dependencies]
@@ -370,10 +374,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx" },
-    { name = "libdatachannel-py", specifier = ">=2025.1.2" },
+    { name = "libdatachannel-py", marker = "extra == 'cloud'", specifier = ">=2025.1.2" },
     { name = "pyotp" },
     { name = "websockets" },
 ]
+provides-extras = ["cloud"]
 
 [package.metadata.requires-dev]
 dev = [

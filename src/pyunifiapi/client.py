@@ -29,7 +29,6 @@ from pyunifiapi._constants import (
 )
 from pyunifiapi._types import ControllerConfig, SSHConfig
 from pyunifiapi.http._local import LocalHttpTransport
-from pyunifiapi.ssh.session import SSHSession
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +233,7 @@ class UnifiClient:
 
     # --- SSH ---
 
-    def ssh(self, ssh_config: SSHConfig) -> SSHSession:
+    def ssh(self, ssh_config: SSHConfig):
         """Create an SSH session to a device through this controller.
 
         Returns an SSHSession that should be used as an async context manager::
@@ -242,6 +241,8 @@ class UnifiClient:
             async with client.ssh(SSHConfig(mac='aa:bb:cc:dd:ee:ff')) as ssh:
                 output = await ssh.execute('uptime')
         """
+        from pyunifiapi.ssh.session import SSHSession
+
         return SSHSession(controller=self._config, ssh=ssh_config)
 
     # --- Cleanup ---
