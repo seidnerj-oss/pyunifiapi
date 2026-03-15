@@ -30,15 +30,21 @@ class LocalSignaling:
     to orchestrate the WebRTC handshake between us and the target device.
     """
 
-    def __init__(self, http: LocalHttpTransport, site: str = 'default') -> None:
+    def __init__(self, http: LocalHttpTransport, site: str = 'default', is_unifi_os: bool = False) -> None:
         self._http = http
         self._site = site
+        self._is_unifi_os = is_unifi_os
+
+    def _path(self, template: str) -> str:
+        """Format an API path, prepending /proxy/network for UniFi OS controllers."""
+        path = template.format(site=self._site)
+        return f'/proxy/network{path}' if self._is_unifi_os else path
 
     def _devmgr_path(self) -> str:
-        return API_CMD_DEVMGR.format(site=self._site)
+        return self._path(API_CMD_DEVMGR)
 
     def _sdn_path(self) -> str:
-        return API_CMD_SDN.format(site=self._site)
+        return self._path(API_CMD_SDN)
 
     async def get_turn_credentials(self) -> TurnCredentials:
         """Request STUN/TURN credentials from the controller.

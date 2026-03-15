@@ -85,6 +85,7 @@ class SSHSession:
 
     async def _connect_local(self) -> None:
         """Connect via local controller HTTP."""
+        from pyunifiapi.controller import Controller
         from pyunifiapi.http._local import LocalHttpTransport
         from pyunifiapi.signaling._local import LocalSignaling
 
@@ -92,7 +93,13 @@ class SSHSession:
 
         self._http = LocalHttpTransport(self._controller_config)
         await self._http.login()
-        self._signaling = LocalSignaling(self._http, self._controller_config.site)
+
+        # Detect UniFi OS for correct API path prefix
+        temp_ctrl = Controller(self._controller_config)
+        temp_ctrl._http = self._http
+        is_unifi_os = await temp_ctrl._detect_unifi_os()
+
+        self._signaling = LocalSignaling(self._http, self._controller_config.site, is_unifi_os=is_unifi_os)
 
         await self._do_ssh_handshake()
 
