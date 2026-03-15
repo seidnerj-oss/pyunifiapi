@@ -11,7 +11,7 @@ import logging
 import re
 
 from pyunifiapi._constants import SDP_POLL_INTERVAL, SDP_POLL_MAX_RETRIES, SSH_SESSION_TTL
-from pyunifiapi._exceptions import SDPPollTimeoutError, SignalingError
+from pyunifiapi._exceptions import SDPPollTimeoutError
 from pyunifiapi._types import TurnCredentials
 from pyunifiapi.cloud import CloudClient
 
@@ -25,9 +25,10 @@ class CloudSSHSignaling:
     them through CloudClient.request() over the WebRTC data channel.
     """
 
-    def __init__(self, cloud_client: CloudClient, site: str = 'default') -> None:
+    def __init__(self, cloud_client: CloudClient, site: str = 'default', fallback_turn: TurnCredentials | None = None) -> None:
         self._client = cloud_client
         self._site = site
+        self._fallback_turn = fallback_turn
 
     def _devmgr_path(self) -> str:
         return f'/proxy/network/api/s/{self._site}/cmd/devmgr'
@@ -36,20 +37,35 @@ class CloudSSHSignaling:
         return f'/proxy/network/api/s/{self._site}/cmd/sdn'
 
     async def get_turn_credentials(self) -> TurnCredentials:
-        """Request STUN/TURN credentials from the controller via cloud tunnel."""
-        data = await self._client.request('POST', self._sdn_path(), {'cmd': 'get-turn-credentials'})
+        """Request STUN/TURN credentials from the controller via cloud tunnel.
 
-        creds_list = data.get('data', [data]) if isinstance(data, dict) else data
-        creds = creds_list[0] if creds_list else {}
-        stun_urls = [u for u in creds.get('uris', []) if u.startswith('stun:')]
-        turn_urls = [u for u in creds.get('uris', []) if u.startswith('turn:')]
+        Falls back to cloud transport TURN credentials if the controller
+        endpoint returns empty (common on older firmware).
+        """
+        try:
+            data = await self._client.request('POST', self._sdn_path(), {'cmd': 'get-turn-credentials'})
 
-        return TurnCredentials(
-            stun_urls=stun_urls,
-            turn_urls=turn_urls,
-            turn_username=creds.get('username', ''),
-            turn_password=creds.get('password', ''),
-        )
+            creds_list = data.get('data', [data]) if isinstance(data, dict) else data
+            creds = creds_list[0] if creds_list else {}
+            stun_urls = [u for u in creds.get('uris', []) if u.startswith('stun:')]
+            turn_urls = [u for u in creds.get('uris', []) if u.startswith('turn:')]
+
+            if stun_urls or turn_urls:
+                return TurnCredentials(
+                    stun_urls=stun_urls,
+                    turn_urls=turn_urls,
+                    turn_username=creds.get('username', ''),
+                    turn_password=creds.get('password', ''),
+                )
+        except Exception as e:
+            logger.debug('Failed to get TURN credentials from controller: %s', e)
+
+        if self._fallback_turn:
+            logger.info('Using fallback cloud TURN credentials')
+            return self._fallback_turn
+
+        logger.debug('No TURN credentials available, proceeding without')
+        return TurnCredentials()
 
     async def build_ssh_session(
         self,
@@ -60,8 +76,9 @@ class CloudSSHSignaling:
         password: str = 'ubnt',
     ) -> None:
         """Tell the device to prepare an SSH session via cloud tunnel."""
-        stun = re.sub(r'^stun:', '', turn.stun_urls[0]) if turn.stun_urls else ''
-        turn_url = re.sub(r'^turns?:', '', turn.turn_urls[0]) if turn.turn_urls else ''
+        # Strip protocol prefix and query params (device expects host:port only)
+        stun = re.sub(r'^stun:', '', turn.stun_urls[0]).split('?')[0] if turn.stun_urls else ''
+        turn_url = re.sub(r'^turns?:', '', turn.turn_urls[0]).split('?')[0] if turn.turn_urls else ''
 
         payload = {
             'cmd': 'build-ssh-session',

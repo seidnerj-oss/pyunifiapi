@@ -46,15 +46,25 @@ class TestGetTurnCredentials:
         assert creds.turn_password == 'pass456'
         mock_http.post.assert_called_with('/api/s/default/cmd/sdn', json={'cmd': 'get-turn-credentials'})
 
-    async def test_failure(self, signaling: LocalSignaling, mock_http: AsyncMock) -> None:
+    async def test_failure_returns_empty(self, signaling: LocalSignaling, mock_http: AsyncMock) -> None:
         mock_http.post.return_value = httpx.Response(
             400,
             json={'meta': {'rc': 'error'}},
             request=httpx.Request('POST', 'https://test/api/s/default/cmd/sdn'),
         )
 
-        with pytest.raises(SignalingError, match='Failed to get TURN'):
-            await signaling.get_turn_credentials()
+        creds = await signaling.get_turn_credentials()
+        assert creds.stun_urls == []
+        assert creds.turn_urls == []
+        assert creds.turn_username == ''
+        assert creds.turn_password == ''
+
+    async def test_exception_returns_empty(self, signaling: LocalSignaling, mock_http: AsyncMock) -> None:
+        mock_http.post.side_effect = Exception('connection refused')
+
+        creds = await signaling.get_turn_credentials()
+        assert creds.stun_urls == []
+        assert creds.turn_urls == []
 
 
 class TestBuildSshSession:

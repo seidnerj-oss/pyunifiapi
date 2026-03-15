@@ -50,23 +50,30 @@ class LocalSignaling:
         """Request STUN/TURN credentials from the controller.
 
         POST /api/s/{site}/cmd/sdn with cmd=get-turn-credentials.
+        Returns empty credentials on failure (local SSH works without TURN
+        via host ICE candidates).
         """
-        resp = await self._http.post(self._sdn_path(), json={'cmd': 'get-turn-credentials'})
-        data = resp.json()
+        try:
+            resp = await self._http.post(self._sdn_path(), json={'cmd': 'get-turn-credentials'})
+            data = resp.json()
 
-        if resp.status_code != 200 or 'data' not in data:
-            raise SignalingError(f'Failed to get TURN credentials: {resp.status_code} {data}')
+            if resp.status_code != 200 or 'data' not in data:
+                logger.debug('TURN credentials not available (status %s), proceeding without', resp.status_code)
+                return TurnCredentials()
 
-        creds = data['data'][0] if data['data'] else {}
-        stun_urls = [u for u in creds.get('uris', []) if u.startswith('stun:')]
-        turn_urls = [u for u in creds.get('uris', []) if u.startswith('turn:')]
+            creds = data['data'][0] if data['data'] else {}
+            stun_urls = [u for u in creds.get('uris', []) if u.startswith('stun:')]
+            turn_urls = [u for u in creds.get('uris', []) if u.startswith('turn:')]
 
-        return TurnCredentials(
-            stun_urls=stun_urls,
-            turn_urls=turn_urls,
-            turn_username=creds.get('username', ''),
-            turn_password=creds.get('password', ''),
-        )
+            return TurnCredentials(
+                stun_urls=stun_urls,
+                turn_urls=turn_urls,
+                turn_username=creds.get('username', ''),
+                turn_password=creds.get('password', ''),
+            )
+        except Exception as e:
+            logger.debug('Failed to get TURN credentials: %s, proceeding without', e)
+            return TurnCredentials()
 
     async def build_ssh_session(
         self,
@@ -81,9 +88,9 @@ class LocalSignaling:
         POST /api/s/{site}/cmd/devmgr with cmd=build-ssh-session.
         The device will start generating its SDP offer.
         """
-        # Strip protocol prefix from STUN/TURN URLs (controller expects host:port only)
-        stun = re.sub(r'^stun:', '', turn.stun_urls[0]) if turn.stun_urls else ''
-        turn_url = re.sub(r'^turns?:', '', turn.turn_urls[0]) if turn.turn_urls else ''
+        # Strip protocol prefix and query params from STUN/TURN URLs (device expects host:port only)
+        stun = re.sub(r'^stun:', '', turn.stun_urls[0]).split('?')[0] if turn.stun_urls else ''
+        turn_url = re.sub(r'^turns?:', '', turn.turn_urls[0]).split('?')[0] if turn.turn_urls else ''
 
         payload = {
             'cmd': 'build-ssh-session',

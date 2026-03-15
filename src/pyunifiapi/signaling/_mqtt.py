@@ -287,7 +287,7 @@ class MqttSignaling:
 
         self._ws = await websockets.connect(
             url,
-            subprotocols=['mqtt'],
+            subprotocols=[websockets.Subprotocol('mqtt')],
             max_size=2**20,
         )
 

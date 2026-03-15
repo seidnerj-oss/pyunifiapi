@@ -112,9 +112,22 @@ class SSHSession:
 
         self._cloud_client = CloudClient(self._controller_config)
         await self._cloud_client.connect()
+
+        # Pass cloud transport TURN credentials as fallback for SSH signaling,
+        # since controller cmd/sdn may return empty on some firmware versions
+        fallback_turn = None
+        if self._cloud_client._cloud_http:
+            try:
+                fallback_turn = await self._cloud_client._cloud_http.get_turn_credentials(
+                    self._controller_config.device_id,
+                )
+            except Exception:
+                pass
+
         self._signaling = CloudSSHSignaling(
             self._cloud_client,
             site=self._controller_config.site,
+            fallback_turn=fallback_turn,
         )
 
         await self._do_ssh_handshake()
