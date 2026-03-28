@@ -17,7 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 cloud = [
-    "libdatachannel-py>=2025.1.2",
+    # Pre-release marker (>=X.dev0) is intentional: stable 2025.1.2 lacks
+    # aarch64 wheels for manylinux_2_36 (Raspberry Pi OS). The pre-release
+    # 2026.1.0.dev1 has compatible aarch64 wheels. PEP 440 requires a
+    # pre-release in the specifier to allow pre-release resolution.
+    "libdatachannel-py>=2025.1.2.dev0",
 ]
 
 [project.scripts]
