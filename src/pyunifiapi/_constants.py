@@ -16,7 +16,7 @@ CLOUD_WSS_URL = 'wss://device-airos.svc.ubnt.com/api/airos/v1/unifi/events'
 CLOUD_DEVICE_URL = 'https://device-airos.svc.ubnt.com/api/airos/v1/unifi'
 
 # SDP polling
-SDP_POLL_MAX_RETRIES = 10
+SDP_POLL_MAX_RETRIES = 90
 SDP_POLL_INTERVAL = 2.0
 
 # WebRTC
