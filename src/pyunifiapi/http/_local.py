@@ -182,6 +182,12 @@ class LocalHttpTransport:
         """Make an authenticated DELETE request."""
         return await self.request('DELETE', path)
 
+    def get_cookies(self) -> dict[str, str]:
+        """Return the current session cookies as a dict for WebSocket auth."""
+        if self._client and self._client.cookies:
+            return dict(self._client.cookies)
+        return {}
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:

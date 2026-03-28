@@ -84,24 +84,23 @@ class SSHSession:
             await self._connect_local()
 
     async def _connect_local(self) -> None:
-        """Connect via local controller HTTP."""
-        from pyunifiapi.controller import Controller
+        """Connect via local controller WebSocket signaling."""
         from pyunifiapi.http._local import LocalHttpTransport
-        from pyunifiapi.signaling._local import LocalSignaling
+        from pyunifiapi.signaling._local_ws import LocalWebSocketSignaling
 
         assert isinstance(self._controller_config, ControllerConfig)
 
         self._http = LocalHttpTransport(self._controller_config)
         await self._http.login()
 
-        # Detect UniFi OS for correct API path prefix
-        temp_ctrl = Controller(self._controller_config)
-        temp_ctrl._http = self._http
-        is_unifi_os = await temp_ctrl._detect_unifi_os()
+        self._signaling = LocalWebSocketSignaling(
+            self._http,
+            host=self._controller_config.host,
+            port=self._controller_config.port,
+        )
+        await self._signaling.connect()
 
-        self._signaling = LocalSignaling(self._http, self._controller_config.site, is_unifi_os=is_unifi_os)
-
-        await self._do_ssh_handshake()
+        await self._do_ssh_handshake_ws()
 
     async def _connect_cloud(self) -> None:
         """Connect via cloud WebRTC tunnel."""
@@ -133,7 +132,7 @@ class SSHSession:
         await self._do_ssh_handshake()
 
     async def _do_ssh_handshake(self) -> None:
-        """Common SSH handshake flow (works with both local and cloud signaling)."""
+        """SSH handshake flow for cloud signaling (device creates offer, we answer)."""
         # Step 1: Get TURN credentials
         turn = await self._signaling.get_turn_credentials()
         logger.debug('Got TURN credentials: %d STUN, %d TURN URLs', len(turn.stun_urls), len(turn.turn_urls))
@@ -168,6 +167,46 @@ class SSHSession:
         self._channel = await self._peer.wait_for_channel(timeout=30.0)
         self._connected = True
         logger.info('SSH session established to %s', self._ssh_config.mac)
+
+    async def _do_ssh_handshake_ws(self) -> None:
+        """SSH handshake flow for local WebSocket signaling (we create offer, device answers).
+
+        This matches the protocol used by the UniFi controller web UI:
+        1. Create WebRTC peer connection with data channel
+        2. Generate our SDP offer
+        3. Send offer + ICE candidates via WebSocket
+        4. Receive device's SDP answer + ICE candidates via WebSocket
+        5. Apply remote description and candidates
+        6. Wait for data channel to open
+        """
+
+        # Step 1: Get TURN/STUN configuration
+        turn = await self._signaling.get_turn_credentials()
+
+        # Step 2: Create peer connection and generate our offer
+        self._peer = PeerConnection(turn)
+        sdp_offer, local_candidates = await self._peer.create_offer(channel_label='ssh')
+
+        # Step 3: Send our offer via WebSocket
+        await self._signaling.send_offer(sdp_offer)
+
+        # Step 4: Send our ICE candidates
+        for candidate in local_candidates:
+            await self._signaling.send_ice_candidate(candidate)
+
+        # Step 5: Wait for device's answer and ICE candidates via WebSocket
+        sdp_answer, remote_candidates = await self._signaling.wait_for_answer()
+
+        # Step 6: Apply remote description and candidates
+        await self._peer.accept_answer(sdp_answer, remote_candidates)
+
+        # Step 7: Send sdpcomplete to signal we're done
+        await self._signaling.send_sdp_complete(sdp_answer)
+
+        # Step 8: Wait for data channel to open
+        self._channel = await self._peer.wait_for_channel(timeout=60.0)
+        self._connected = True
+        logger.info('SSH session established to %s via WebSocket signaling', self._ssh_config.mac)
 
     async def read(self, timeout: float = 30.0) -> bytes:
         """Read data from the SSH channel."""
@@ -221,6 +260,12 @@ class SSHSession:
                 )
             except Exception:
                 logger.debug('Error closing SSH session on controller', exc_info=True)
+
+        if self._signaling and hasattr(self._signaling, 'close'):
+            try:
+                await self._signaling.close()
+            except Exception:
+                logger.debug('Error closing signaling', exc_info=True)
 
         if self._peer:
             await self._peer.close()
