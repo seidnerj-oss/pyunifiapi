@@ -84,7 +84,9 @@ class CloudClient:
 
         remote_candidates = [ice.get('candidate', '') for ice in answer.get('ice_candidates', []) if ice.get('candidate')]
         await self._peer.accept_answer(remote_sdp, remote_candidates)
-        await self._peer.wait_for_channel(timeout=120.0)
+        from pyunifiapi._constants import WEBRTC_CHANNEL_OPEN_TIMEOUT
+
+        await self._peer.wait_for_channel(timeout=WEBRTC_CHANNEL_OPEN_TIMEOUT)
 
         api_channel = self._peer.create_data_channel('api:1')
         self._peer.data_channel = api_channel

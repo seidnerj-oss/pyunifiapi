@@ -15,17 +15,17 @@ CLOUD_IOT_REGION = 'us-west-2'
 CLOUD_WSS_URL = 'wss://device-airos.svc.ubnt.com/api/airos/v1/unifi/events'
 CLOUD_DEVICE_URL = 'https://device-airos.svc.ubnt.com/api/airos/v1/unifi'
 
-# SDP polling (cloud path uses MQTT, device response time varies 70-270s)
+# SDP polling (device response time varies 35-270s depending on device type)
 SDP_POLL_MAX_RETRIES = 150
 SDP_POLL_INTERVAL = 2.0
 
 # WebRTC
-WEBRTC_CHANNEL_OPEN_TIMEOUT = 60.0
+WEBRTC_CHANNEL_OPEN_TIMEOUT = 120.0
 ICE_GATHERING_TIMEOUT = 60.0
 
 # SSH session
 SSH_SESSION_TTL = -1  # No TTL (device-side timeout)
-SSH_AUTO_CLOSE_TIMEOUT = 30.0
+SSH_COMMAND_TIMEOUT = 30.0
 
 # Controller API paths
 API_LOGIN = '/api/auth/login'
