@@ -84,23 +84,24 @@ class SSHSession:
             await self._connect_local()
 
     async def _connect_local(self) -> None:
-        """Connect via local controller WebSocket signaling."""
+        """Connect via local controller REST + WebSocket signaling."""
+        from pyunifiapi.controller import Controller
         from pyunifiapi.http._local import LocalHttpTransport
-        from pyunifiapi.signaling._local_ws import LocalWebSocketSignaling
+        from pyunifiapi.signaling._local import LocalSignaling
 
         assert isinstance(self._controller_config, ControllerConfig)
 
         self._http = LocalHttpTransport(self._controller_config)
         await self._http.login()
 
-        self._signaling = LocalWebSocketSignaling(
-            self._http,
-            host=self._controller_config.host,
-            port=self._controller_config.port,
-        )
-        await self._signaling.connect()
+        # Detect UniFi OS for correct API path prefix
+        temp_ctrl = Controller(self._controller_config)
+        temp_ctrl._http = self._http
+        is_unifi_os = await temp_ctrl._detect_unifi_os()
 
-        await self._do_ssh_handshake_ws()
+        self._signaling = LocalSignaling(self._http, self._controller_config.site, is_unifi_os=is_unifi_os)
+
+        await self._do_ssh_handshake()
 
     async def _connect_cloud(self) -> None:
         """Connect via cloud WebRTC tunnel."""

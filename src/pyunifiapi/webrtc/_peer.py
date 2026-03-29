@@ -117,24 +117,36 @@ class PeerConnection:
         loop = self._loop
 
         def on_open() -> None:
-            logger.debug('Data channel open: %s', channel.label())
+            logger.info('Data channel open: label=%s, id=%s', channel.label(), channel.id())
             if loop and loop.is_running():
                 loop.call_soon_threadsafe(self._channel_open.set)
             else:
                 self._channel_open.set()
 
+        def on_closed() -> None:
+            logger.info('Data channel closed: label=%s', channel.label())
+
+        def on_error(error: str) -> None:
+            logger.error('Data channel error: label=%s, error=%s', channel.label(), error)
+
         def on_message(data: bytes | str) -> None:
             if isinstance(data, str):
+                logger.debug('Data channel recv (str, %d chars): %s', len(data), repr(data[:200]))
                 data = data.encode('utf-8')
+            else:
+                logger.debug('Data channel recv (bytes, %d bytes): %s', len(data), repr(data[:200]))
             if loop and loop.is_running():
                 loop.call_soon_threadsafe(self._message_queue.put_nowait, data)
             else:
                 self._message_queue.put_nowait(data)
 
         channel.on_open(on_open)
+        channel.on_closed(on_closed)
+        channel.on_error(on_error)
         channel.on_message(on_message)
 
         if channel.is_open():
+            logger.info('Data channel already open: label=%s', channel.label())
             if loop and loop.is_running():
                 loop.call_soon_threadsafe(self._channel_open.set)
             else:
