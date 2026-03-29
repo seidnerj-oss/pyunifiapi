@@ -21,6 +21,7 @@ import logging
 import uuid as uuid_mod
 from typing import Any
 
+from pyunifiapi._constants import SSH_COMMAND_TIMEOUT, WEBRTC_CHANNEL_OPEN_TIMEOUT
 from pyunifiapi._exceptions import SSHSessionError
 from pyunifiapi._types import CloudConfig, ControllerConfig, SSHConfig
 from pyunifiapi.webrtc._peer import PeerConnection
@@ -165,7 +166,7 @@ class SSHSession:
         )
 
         # Step 6: Wait for device to open the data channel
-        self._channel = await self._peer.wait_for_channel(timeout=30.0)
+        self._channel = await self._peer.wait_for_channel(timeout=WEBRTC_CHANNEL_OPEN_TIMEOUT)
         self._connected = True
         logger.info('SSH session established to %s', self._ssh_config.mac)
 
@@ -205,7 +206,7 @@ class SSHSession:
         await self._signaling.send_sdp_complete(sdp_answer)
 
         # Step 8: Wait for data channel to open
-        self._channel = await self._peer.wait_for_channel(timeout=60.0)
+        self._channel = await self._peer.wait_for_channel(timeout=WEBRTC_CHANNEL_OPEN_TIMEOUT)
         self._connected = True
         logger.info('SSH session established to %s via WebSocket signaling', self._ssh_config.mac)
 
@@ -243,7 +244,7 @@ class SSHSession:
 
         self._channel.send(data)
 
-    async def execute(self, command: str, timeout: float = 30.0, prompt: str = '# ') -> str:
+    async def execute(self, command: str, timeout: float = SSH_COMMAND_TIMEOUT, prompt: str = '# ') -> str:
         """Execute a command and return its output.
 
         Note: The default prompt '# ' works for most UniFi devices (BusyBox ash

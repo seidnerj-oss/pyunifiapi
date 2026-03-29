@@ -14,7 +14,7 @@ from typing import Any
 
 import websockets
 
-from pyunifiapi._constants import CLOUD_WSS_URL
+from pyunifiapi._constants import CLOUD_WSS_URL, MQTT_MESSAGE_TIMEOUT
 from pyunifiapi._exceptions import SignalingError
 from pyunifiapi._types import TurnCredentials
 
@@ -120,7 +120,7 @@ class CloudSignaling:
         logger.debug('Sent SDP offer request for device %s', device_id)
 
         try:
-            response = await asyncio.wait_for(future, timeout=30.0)
+            response = await asyncio.wait_for(future, timeout=MQTT_MESSAGE_TIMEOUT)
         except TimeoutError as e:
             raise SignalingError(f'Timed out waiting for SDP offer from cloud device {device_id}') from e
         finally:

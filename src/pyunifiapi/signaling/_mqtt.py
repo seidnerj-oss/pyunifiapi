@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 import websockets
 
-from pyunifiapi._constants import CLOUD_IOT_HOST, CLOUD_IOT_REGION
+from pyunifiapi._constants import CLOUD_IOT_HOST, CLOUD_IOT_REGION, MQTT_ICE_COLLECT_TIMEOUT, MQTT_MESSAGE_TIMEOUT
 from pyunifiapi._exceptions import SignalingError
 from pyunifiapi._types import TurnCredentials
 
@@ -471,7 +471,7 @@ class MqttSignaling:
 
         try:
             while True:
-                msg = await asyncio.wait_for(queue.get(), timeout=30.0)
+                msg = await asyncio.wait_for(queue.get(), timeout=MQTT_MESSAGE_TIMEOUT)
                 event = msg.get('event', '')
 
                 if event == 'answer':
@@ -479,7 +479,7 @@ class MqttSignaling:
                     logger.debug('Received SDP answer')
                     try:
                         while True:
-                            msg = await asyncio.wait_for(queue.get(), timeout=5.0)
+                            msg = await asyncio.wait_for(queue.get(), timeout=MQTT_ICE_COLLECT_TIMEOUT)
                             event = msg.get('event', '')
                             if event == 'icecandidate':
                                 remote_candidates.append(msg)

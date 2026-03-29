@@ -14,7 +14,7 @@ from typing import Any
 
 import libdatachannel as ldc
 
-from pyunifiapi._constants import ICE_GATHERING_TIMEOUT, WEBRTC_CHANNEL_OPEN_TIMEOUT
+from pyunifiapi._constants import ICE_GATHERING_TIMEOUT, SDP_DESCRIPTION_TIMEOUT, WEBRTC_CHANNEL_OPEN_TIMEOUT
 from pyunifiapi._exceptions import WebRTCError
 from pyunifiapi._types import TurnCredentials
 
@@ -168,7 +168,7 @@ class PeerConnection:
         self._pc = self._create_pc()
         self._pc.set_remote_description(ldc.Description(sdp_offer, 'offer'))
 
-        if not await _await_threading_event(self._desc_ready, 10.0):
+        if not await _await_threading_event(self._desc_ready, SDP_DESCRIPTION_TIMEOUT):
             raise WebRTCError('Timed out waiting for local SDP answer generation')
 
         if not await _await_threading_event(self._gathering_done, ICE_GATHERING_TIMEOUT):
@@ -197,7 +197,7 @@ class PeerConnection:
         self._data_channel = channel
         self._setup_channel_handlers(channel)
 
-        if not await _await_threading_event(self._desc_ready, 10.0):
+        if not await _await_threading_event(self._desc_ready, SDP_DESCRIPTION_TIMEOUT):
             raise WebRTCError('Timed out waiting for local SDP offer generation')
 
         if not await _await_threading_event(self._gathering_done, ICE_GATHERING_TIMEOUT):

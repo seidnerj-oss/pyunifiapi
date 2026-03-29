@@ -18,10 +18,19 @@ CLOUD_DEVICE_URL = 'https://device-airos.svc.ubnt.com/api/airos/v1/unifi'
 # SDP polling (device response time varies 35-270s depending on device type)
 SDP_POLL_MAX_RETRIES = 150
 SDP_POLL_INTERVAL = 2.0
+SDP_DESCRIPTION_TIMEOUT = 10.0
 
 # WebRTC
 WEBRTC_CHANNEL_OPEN_TIMEOUT = 120.0
 ICE_GATHERING_TIMEOUT = 60.0
+
+# MQTT signaling
+MQTT_MESSAGE_TIMEOUT = 30.0
+MQTT_ICE_COLLECT_TIMEOUT = 5.0
+
+# Cloud API
+CLOUD_API_REQUEST_TIMEOUT = 30.0
+CLOUD_API_CHANNEL_OPEN_TIMEOUT = 10.0
 
 # SSH session
 SSH_SESSION_TTL = -1  # No TTL (device-side timeout)

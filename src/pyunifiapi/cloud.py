@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 
+from pyunifiapi._constants import CLOUD_API_CHANNEL_OPEN_TIMEOUT, CLOUD_API_REQUEST_TIMEOUT, WEBRTC_CHANNEL_OPEN_TIMEOUT
 from pyunifiapi._exceptions import WebRTCError
 from pyunifiapi._types import CloudConfig
 from pyunifiapi.http._cloud import CloudHttpTransport
@@ -84,8 +85,6 @@ class CloudClient:
 
         remote_candidates = [ice.get('candidate', '') for ice in answer.get('ice_candidates', []) if ice.get('candidate')]
         await self._peer.accept_answer(remote_sdp, remote_candidates)
-        from pyunifiapi._constants import WEBRTC_CHANNEL_OPEN_TIMEOUT
-
         await self._peer.wait_for_channel(timeout=WEBRTC_CHANNEL_OPEN_TIMEOUT)
 
         api_channel = self._peer.create_data_channel('api:1')
@@ -114,7 +113,7 @@ class CloudClient:
         if api_channel.is_open():
             api_open.set()
         else:
-            await asyncio.wait_for(api_open.wait(), timeout=10.0)
+            await asyncio.wait_for(api_open.wait(), timeout=CLOUD_API_CHANNEL_OPEN_TIMEOUT)
 
         self._connected = True
         logger.info('Cloud API connection established to device %s', self._config.device_id)
@@ -171,7 +170,7 @@ class CloudClient:
         channel.send(frame_bytes)
 
         try:
-            return await asyncio.wait_for(future, timeout=30.0)
+            return await asyncio.wait_for(future, timeout=CLOUD_API_REQUEST_TIMEOUT)
         except TimeoutError as e:
             self._pending.pop(request_id, None)
             raise WebRTCError(f'Request timed out: {method} {path}') from e
