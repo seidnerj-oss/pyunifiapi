@@ -244,7 +244,17 @@ class SSHSession:
         self._channel.send(data)
 
     async def execute(self, command: str, timeout: float = 30.0, prompt: str = '# ') -> str:
-        """Execute a command and return its output."""
+        """Execute a command and return its output.
+
+        Note: The default prompt '# ' works for most UniFi devices (BusyBox ash
+        shell as root). The prompt may include ANSI escape codes (e.g.,
+        ``\\x1b[01;32mISey@LTEBackupPro\\x1b[00m:~# ``). The marker match looks
+        for '# ' anywhere in the accumulated output, so ANSI codes don't interfere.
+
+        Important: On first use after connecting, the device outputs a login banner
+        (BusyBox version, ASCII art, MOTD). Call ``read_until('# ')`` once before
+        the first ``execute()`` to consume the banner.
+        """
         await self.write(command + '\n')
         output = await self.read_until(prompt, timeout=timeout)
         return output.decode('utf-8', errors='replace')
