@@ -84,7 +84,7 @@ class CloudClient:
 
         remote_candidates = [ice.get('candidate', '') for ice in answer.get('ice_candidates', []) if ice.get('candidate')]
         await self._peer.accept_answer(remote_sdp, remote_candidates)
-        await self._peer.wait_for_channel(timeout=30.0)
+        await self._peer.wait_for_channel(timeout=120.0)
 
         api_channel = self._peer.create_data_channel('api:1')
         self._peer.data_channel = api_channel
