@@ -24,6 +24,9 @@ cloud = [
     "libdatachannel-py>=2025.1.2.dev0",
 ]
 
+[project.urls]
+Repository = "https://github.com/seidnerj/pyunifiapi"
+
 [project.scripts]
 pyunifiapi = "pyunifiapi.cli.__main__:main"
 
