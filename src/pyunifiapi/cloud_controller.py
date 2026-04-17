@@ -28,10 +28,10 @@ class CloudController:
     Usage::
 
         config = CloudConfig(
-            username='sso@email.com',
-            password='pass',
+            username='user@example.com',
+            password='pass',  # pragma: allowlist secret
             device_id='abc123',
-            totp_secret='JBSWY3DPEHPK3PXP',
+            totp_secret='JBSWY3DPEHPK3PXP',  # pragma: allowlist secret
             site='default',
         )
         controller = CloudController(config)
