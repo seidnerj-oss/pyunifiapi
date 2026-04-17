@@ -8,7 +8,14 @@ version = "0.1.0"
 description = "Python client for UniFi Network controller and cloud API over WebRTC"
 readme = "README.md"
 requires-python = ">=3.14"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
+authors = [{ name = "seidnerj" }]
+keywords = ["unifi", "ubiquiti", "python", "webrtc", "network-controller"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+]
 dependencies = [
     "httpx",
     "pyotp",
@@ -25,7 +32,9 @@ cloud = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/seidnerj/pyunifiapi"
 Repository = "https://github.com/seidnerj/pyunifiapi"
+Issues = "https://github.com/seidnerj/pyunifiapi/issues"
 
 [project.scripts]
 pyunifiapi = "pyunifiapi.cli.__main__:main"

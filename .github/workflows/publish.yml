@@ -1,0 +1,29 @@
+name: Publish to PyPI
+
+on:
+    push:
+        tags:
+            - "v*"
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        environment: pypi
+        permissions:
+            id-token: write
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v4
+            - run: uv sync
+            - name: Verify tag matches project version
+              env:
+                  TAG_REF: ${{ github.ref_name }}
+              run: |
+                  PKG_VERSION=$(uv run python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+                  TAG_VERSION="${TAG_REF#v}"
+                  if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+                      echo "Tag $TAG_VERSION does not match project version $PKG_VERSION"
+                      exit 1
+                  fi
+            - run: uv build
+            - uses: pypa/gh-action-pypi-publish@release/v1
