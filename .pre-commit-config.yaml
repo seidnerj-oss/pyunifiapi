@@ -25,6 +25,11 @@ repos:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   # Built-in pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -118,6 +123,7 @@ repos:
         pass_filenames: true
 
 # Global settings
+
 default_stages: [pre-commit]
 fail_fast: false
 default_language_version:
