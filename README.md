@@ -115,6 +115,14 @@ uv run pytest tests/ -v
 - [aiounifi](https://github.com/Kane610/aiounifi) - Async UniFi controller library for Home Assistant (REST API only, no SSH)
 - [red-alert](https://github.com/seidnerj/red-alert) - Israeli Home Front Command alert monitor (uses this for UniFi LTE Pro SSH setup)
 
+## Disclaimer
+
+UniFi is a trademark of Ubiquiti Inc. This project is not affiliated with, endorsed by, or sponsored by Ubiquiti Inc.
+
+> **Note:** This library uses the UniFi Network controller REST API and cloud WebRTC endpoints, some of which are undocumented. It is not supported by Ubiquiti. Use at your own risk.
+
 ## License
 
-MIT
+MIT © 2026 seidnerj
+
+This software is provided "as is" without warranty of any kind. See [LICENSE](LICENSE) for full terms.
