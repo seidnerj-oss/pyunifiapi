@@ -1,5 +1,7 @@
 """pyunifiapi - Python client for UniFi Network controller and cloud API over WebRTC."""
 
+from typing import TYPE_CHECKING
+
 from pyunifiapi._exceptions import (
     ApiConnectionError,
     AuthenticationError,
@@ -15,6 +17,14 @@ from pyunifiapi._exceptions import (
 from pyunifiapi._types import CloudConfig, ControllerConfig, SSHConfig, TurnCredentials
 from pyunifiapi.client import UnifiClient
 from pyunifiapi.controller import Controller
+
+if TYPE_CHECKING:
+    # Re-exported for static analysis only. At runtime these resolve through
+    # __getattr__ below, which keeps the optional cloud/WebRTC dependencies
+    # from being imported until they are actually used.
+    from pyunifiapi.cloud import CloudClient
+    from pyunifiapi.cloud_controller import CloudController
+    from pyunifiapi.ssh.session import SSHSession
 
 
 def __getattr__(name: str):

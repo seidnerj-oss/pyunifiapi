@@ -1,5 +1,11 @@
 """WebRTC peer connection and data channel management."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Re-exported for static analysis only; resolved lazily at runtime below.
+    from pyunifiapi.webrtc._peer import PeerConnection
+
 __all__ = ['PeerConnection']
 
 

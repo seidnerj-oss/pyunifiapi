@@ -1,5 +1,11 @@
 """SSH-over-WebRTC sessions to UniFi devices."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Re-exported for static analysis only; resolved lazily at runtime below.
+    from pyunifiapi.ssh.session import SSHSession
+
 __all__ = ['SSHSession']
 
 
