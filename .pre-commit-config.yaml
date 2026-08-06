@@ -103,8 +103,13 @@ repos:
 
       - id: type-checking-pyright
         name: type checking (basedpyright)
+        # --extra cloud: libdatachannel-py is an optional extra, so a plain
+        # `uv run` leaves it uninstalled and basedpyright cannot resolve it.
+        # The unresolved import makes ldc.PeerConnection Unknown, which
+        # collapses `ldc.PeerConnection | None` to None and reports every
+        # attribute access on it as an error.
         description: Run basedpyright on the codebase using uv
-        entry: bash -c 'uv run basedpyright src/'
+        entry: bash -c 'uv run --extra cloud basedpyright src/'
         language: system
         types: [python]
         pass_filenames: false
