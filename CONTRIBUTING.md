@@ -55,7 +55,6 @@ The following checks run automatically on commit:
 - **pretty-format-json** - Auto-format JSON files
 - **mypy** - Type checking
 - **basedpyright** - Type checking
-- **check-claude-attribution** - Prevent commits with Claude attribution (commit-msg stage)
 
 Run all hooks manually:
 
