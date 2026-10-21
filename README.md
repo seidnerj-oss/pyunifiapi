@@ -111,15 +111,17 @@ uv run pytest tests/ -v
 
 ## Related Projects
 
-- [node-unifiapi](https://github.com/delian/node-unifiapi) - The original Node.js implementation
+- [node-unifiapi](https://github.com/delian/node-unifiapi) - Node.js client whose protocol work served as a reference; pyunifiapi is an independent implementation
 - [aiounifi](https://github.com/Kane610/aiounifi) - Async UniFi controller library for Home Assistant (REST API only, no SSH)
 - [red-alert](https://github.com/seidnerj/red-alert) - Israeli Home Front Command alert monitor (uses this for UniFi LTE Pro SSH setup)
 
-## Disclaimer
+## Disclaimer and Legal Notice
 
-UniFi is a trademark of Ubiquiti Inc. This project is not affiliated with, endorsed by, or sponsored by Ubiquiti Inc.
+Ubiquiti, UniFi and UniFi OS are trademarks of Ubiquiti Inc. This project is not affiliated with, endorsed by, or sponsored by Ubiquiti Inc.
 
-> **Note:** This library uses the UniFi Network controller REST API and cloud WebRTC endpoints, some of which are undocumented. It is not supported by Ubiquiti. Use at your own risk.
+This library talks to the UniFi Network controller REST API and to Ubiquiti's cloud signaling and WebRTC endpoints, several of which are undocumented and can change without notice. Use of Ubiquiti's cloud services is governed by Ubiquiti's [Terms of Service](https://ui.com/legal/termsofservice/); automated or unofficial access may conflict with them, and Ubiquiti may block it or suspend the associated UI account. **You assume all risk of using this library, including the risk of losing access to your UI account.**
+
+Use it only against controllers and devices you own or are authorized to administer.
 
 ## License
 
