@@ -39,6 +39,7 @@ src/pyunifiapi/
     _cloud.py            # CloudSignaling - SDP exchange via cloud WebSocket
   ssh/
     session.py           # SSHSession - SSH-over-WebRTC orchestrator
+    dropbear.py          # enable_ssh - authorize a key and start dropbear via the debug terminal
   cli/
     __main__.py          # CLI entry point (pyunifiapi ssh ...)
 ```

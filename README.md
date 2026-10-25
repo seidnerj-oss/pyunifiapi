@@ -47,6 +47,20 @@ async def main():
 asyncio.run(main())
 ```
 
+### Enable direct SSH on a device
+
+Some devices (e.g. the LTE Backup Pro) come back from a reboot with their dropbear SSH server stopped. `enable_ssh` opens the debug terminal, appends your public key to `/etc/dropbear/authorized_keys` unless that exact line is already there, starts `dropbear -R` unless it is already running, and raises `SSHSessionError` if dropbear is still not running afterwards:
+
+```python
+from pathlib import Path
+from pyunifiapi import enable_ssh
+
+result = await enable_ssh(controller, 'aa:bb:cc:dd:ee:ff', Path('~/.ssh/id_ed25519.pub').expanduser().read_text())
+print(result.key_added, result.dropbear_started)
+```
+
+`controller` is a `ControllerConfig` or `CloudConfig`. dropbear does not survive a reboot on such devices, so run it again after one; repeated calls are safe.
+
 ### REST API client
 
 ```python
