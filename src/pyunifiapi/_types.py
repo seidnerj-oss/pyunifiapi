@@ -41,6 +41,14 @@ class SSHConfig:
 
 
 @dataclass(frozen=True)
+class SSHEnableResult:
+    """What :func:`pyunifiapi.ssh.enable_ssh` changed on the device."""
+
+    key_added: bool
+    dropbear_started: bool
+
+
+@dataclass(frozen=True)
 class TurnCredentials:
     """STUN/TURN server credentials for WebRTC."""
 

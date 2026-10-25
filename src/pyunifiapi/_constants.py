@@ -35,6 +35,8 @@ CLOUD_API_CHANNEL_OPEN_TIMEOUT = 10.0
 # SSH session
 SSH_SESSION_TTL = -1  # No TTL (device-side timeout)
 SSH_COMMAND_TIMEOUT = 30.0
+SSH_BANNER_TIMEOUT = 60.0
+DROPBEAR_AUTHORIZED_KEYS = '/etc/dropbear/authorized_keys'
 
 # Controller API paths
 API_LOGIN = '/api/auth/login'
