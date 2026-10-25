@@ -7,7 +7,7 @@ Code provenance: write code independently; never copy license-incompatible or pr
 ## Quick Setup
 
 ```bash
-uv sync --group dev
+uv sync --group dev --extra cloud
 uv run pre-commit install
 uv run pytest
 ```

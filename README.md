@@ -119,7 +119,7 @@ This means SSH works even if you can't directly reach the device's SSH port - th
 ## Development
 
 ```bash
-uv sync --group dev
+uv sync --group dev --extra cloud
 uv run pytest tests/ -v
 ```
 
