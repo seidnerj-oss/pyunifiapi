@@ -8,7 +8,7 @@ git clone https://github.com/seidnerj/pyunifiapi.git
 cd pyunifiapi
 
 # Install dependencies (requires uv)
-uv sync --group dev
+uv sync --group dev --extra cloud
 
 # Install pre-commit hooks
 uv run pre-commit install
