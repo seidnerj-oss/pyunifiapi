@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 
 [[package]]
@@ -352,13 +352,9 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "libdatachannel-py" },
     { name = "pyotp" },
     { name = "websockets" },
-]
-
-[package.optional-dependencies]
-cloud = [
-    { name = "libdatachannel-py" },
 ]
 
 [package.dev-dependencies]
@@ -374,7 +370,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx" },
-    { name = "libdatachannel-py", marker = "extra == 'cloud'", specifier = ">=2025.1.2.dev0" },
+    { name = "libdatachannel-py", specifier = ">=2025.1.2.dev0" },
     { name = "pyotp" },
     { name = "websockets" },
 ]
