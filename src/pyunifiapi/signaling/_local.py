@@ -3,7 +3,8 @@
 Implements the 6-step signaling flow:
 1. Get TURN credentials from controller
 2. Tell device to build SSH session
-3. Poll for device's SDP offer
+3. Wait for the device's SDP offer: Network 11.x pushes it as a ``device:sdp-offer``
+   event on the events websocket, older controllers serve it via ``get-sdp-offer``
 4. Send our SDP answer back
 5. (WebRTC connection established)
 6. Close SSH session
@@ -14,11 +15,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from contextlib import suppress
 
 from pyunifiapi._constants import API_CMD_DEVMGR, API_CMD_SDN, SDP_POLL_INTERVAL, SDP_POLL_MAX_RETRIES, SSH_SESSION_TTL
 from pyunifiapi._exceptions import SDPPollTimeoutError, SignalingError
 from pyunifiapi._types import TurnCredentials
 from pyunifiapi.http._local import LocalHttpTransport
+from pyunifiapi.models.message import MessageKey
+from pyunifiapi.websocket import WebSocketClient
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,8 @@ class LocalSignaling:
         self._http = http
         self._site = site
         self._is_unifi_os = is_unifi_os
+        self._events_ws: WebSocketClient | None = None
+        self._event_offer: asyncio.Task[str | None] | None = None
 
     def _path(self, template: str) -> str:
         """Format an API path, prepending /proxy/network for UniFi OS controllers."""
@@ -86,8 +92,11 @@ class LocalSignaling:
         """Tell the device to prepare an SSH session.
 
         POST /api/s/{site}/cmd/devmgr with cmd=build-ssh-session.
-        The device will start generating its SDP offer.
+        The device will start generating its SDP offer. The events websocket is
+        opened first so a ``device:sdp-offer`` push cannot be missed.
         """
+        await self._listen_for_offer_event(uuid)
+
         # Strip protocol prefix and query params from STUN/TURN URLs (device expects host:port only)
         stun = re.sub(r'^stun:', '', turn.stun_urls[0]).split('?')[0] if turn.stun_urls else ''
         turn_url = re.sub(r'^turns?:', '', turn.turn_urls[0]).split('?')[0] if turn.turn_urls else ''
@@ -103,13 +112,52 @@ class LocalSignaling:
             'password': turn.turn_password,
         }
 
-        resp = await self._http.post(self._devmgr_path(), json=payload)
-        data = resp.json()
+        try:
+            resp = await self._http.post(self._devmgr_path(), json=payload)
+            data = resp.json()
 
-        if resp.status_code != 200:
-            raise SignalingError(f'Failed to build SSH session: {resp.status_code} {data}')
+            if resp.status_code != 200:
+                raise SignalingError(f'Failed to build SSH session: {resp.status_code} {data}')
+        except BaseException:
+            await self.close()
+            raise
 
         logger.info('SSH session build requested for device %s (uuid: %s)', mac, uuid)
+
+    async def _listen_for_offer_event(self, uuid: str) -> None:
+        """Open the events websocket and start waiting for this session's offer event.
+
+        A connection failure is logged and leaves get-sdp-offer polling as the only source.
+        """
+        cookie = self._http.get_cookies().get('TOKEN', '')
+        config = self._http._config
+        ws = WebSocketClient(
+            host=config.host,
+            port=config.port,
+            site=self._site,
+            session_cookie=cookie,
+            is_unifi_os=self._is_unifi_os,
+            ssl_verify=config.ssl_verify,
+        )
+        try:
+            await ws.connect()
+        except Exception as e:
+            logger.warning('Events websocket unavailable (%s), relying on get-sdp-offer polling', e)
+            return
+
+        self._events_ws = ws
+        self._event_offer = asyncio.create_task(self._wait_for_offer_event(ws, uuid))
+
+    @staticmethod
+    async def _wait_for_offer_event(ws: WebSocketClient, uuid: str) -> str | None:
+        """Return the SDP from the device:sdp-offer event matching uuid, or None if the stream ends."""
+        async for message in ws.listen():
+            if message.meta.message_key != MessageKey.SDP_OFFER:
+                continue
+            for item in message.data:
+                if item.get('ssh_sdp_offer_id') == uuid and item.get('ssh_sdp_offer'):
+                    return str(item['ssh_sdp_offer'])
+        return None
 
     async def poll_sdp_offer(
         self,
@@ -118,17 +166,43 @@ class LocalSignaling:
         max_retries: int = SDP_POLL_MAX_RETRIES,
         interval: float = SDP_POLL_INTERVAL,
     ) -> str:
-        """Poll for the device's SDP offer.
+        """Wait for the device's SDP offer from whichever source delivers first.
 
-        POST /api/s/{site}/cmd/devmgr with cmd=get-sdp-offer.
-        Retries up to max_retries times with interval seconds between attempts.
+        Races the ``device:sdp-offer`` websocket event started by build_ssh_session
+        (Network 11.x) against get-sdp-offer polling (older controllers), then
+        cancels the loser and closes the websocket.
 
         Returns:
             The SDP offer string from the device.
 
         Raises:
-            SDPPollTimeoutError: If no offer received after all retries.
+            SDPPollTimeoutError: If neither source delivers within the polling budget.
         """
+        event_offer = self._event_offer
+        if event_offer is None:
+            return await self._poll_sdp_offer(mac, uuid, max_retries, interval)
+
+        poll = asyncio.create_task(self._poll_sdp_offer(mac, uuid, max_retries, interval))
+        try:
+            pending: set[asyncio.Task[str | None]] = {poll, event_offer}
+            while True:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                if event_offer in done:
+                    if not event_offer.cancelled() and event_offer.exception() is None and (sdp := event_offer.result()):
+                        logger.info('Received SDP offer from device %s via websocket event', mac)
+                        return sdp
+                    logger.debug('Events websocket ended without an offer, continuing to poll')
+                if poll in done:
+                    return poll.result()  # type: ignore[return-value]
+        finally:
+            if not poll.done():
+                poll.cancel()
+                with suppress(asyncio.CancelledError):
+                    await poll
+            await self.close()
+
+    async def _poll_sdp_offer(self, mac: str, uuid: str, max_retries: int, interval: float) -> str:
+        """Poll POST /api/s/{site}/cmd/devmgr with cmd=get-sdp-offer up to max_retries times."""
         payload = {
             'cmd': 'get-sdp-offer',
             'mac': mac.lower(),
@@ -184,3 +258,15 @@ class LocalSignaling:
             logger.warning('Failed to close SSH session: %s %s', resp.status_code, resp.text)
         else:
             logger.info('SSH session closed for device %s', mac)
+
+    async def close(self) -> None:
+        """Stop waiting for an offer event and close the events websocket, if open."""
+        event_offer, self._event_offer = self._event_offer, None
+        if event_offer is not None:
+            event_offer.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await event_offer
+
+        ws, self._events_ws = self._events_ws, None
+        if ws is not None:
+            await ws.close()
